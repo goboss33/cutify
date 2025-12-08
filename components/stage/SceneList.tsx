@@ -131,7 +131,7 @@ export function SceneList() {
 
                                     {/* Right side thumbnail (visible when collapsed usually, but accordions hide content. We can put a thumb in trigger if we want) */}
                                     <div className="hidden sm:block h-10 w-16 bg-neutral-800 rounded bg-cover bg-center shrink-0 border border-white/10"
-                                        style={{ backgroundImage: scene.shots && scene.shots[0] ? `url(${scene.shots[0].thumbnail || scene.shots[0].image_url})` : 'none' }}
+                                        style={{ backgroundImage: scene.shots && scene.shots[0] ? `url(${scene.shots[0].image_url?.startsWith('http') ? scene.shots[0].image_url : `http://127.0.0.1:8000${scene.shots[0].image_url}`})` : 'none' }}
                                     />
                                 </div>
                             </AccordionTrigger>
@@ -174,6 +174,16 @@ export function SceneList() {
                                                 {generatingStoryboardIds.has(scene.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
                                                 {scene.shots && scene.shots.length > 0 ? "Regenerate Storyboard" : "Generate Storyboard"}
                                             </Button>
+                                            {scene.master_image_url && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-7 gap-2 text-xs"
+                                                    onClick={() => window.open(`http://127.0.0.1:8000${scene.master_image_url}`, '_blank')}
+                                                >
+                                                    <Filter className="h-3 w-3" /> View Source Grid
+                                                </Button>
+                                            )}
                                         </div>
                                         <StoryboardGrid scene={scene} />
                                     </div>

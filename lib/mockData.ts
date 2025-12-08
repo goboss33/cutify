@@ -31,6 +31,7 @@ export interface Scene {
     title: string;
     summary?: string;
     estimated_duration?: string;
+    master_image_url?: string;
     status: 'pending' | 'scripted' | 'storyboarded' | 'done' | 'in-progress';
 
     // UI specific (optional or computed later)

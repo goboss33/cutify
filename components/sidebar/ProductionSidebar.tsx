@@ -89,13 +89,19 @@ export function ProductionSidebar() {
         try {
             const response = await fetch("http://127.0.0.1:8000/api/extract-concept", {
                 method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messages: messages }),
             });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Server Error ${response.status}: ${errText}`);
+            }
             const data = await response.json();
             // alert("Concept Validated!\n\n" + JSON.stringify(data, null, 2));
             setCurrentProject(data);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Extraction error:", error);
-            alert("Failed to validate concept.");
+            alert("Failed to validate concept.\n" + error.message);
         } finally {
             setIsLoading(false);
         }

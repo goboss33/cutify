@@ -40,6 +40,16 @@ async def extract_concept_from_chat(chat_history_str: str) -> dict:
 
         combined_prompt = f"{EXTRACTOR_SYSTEM_PROMPT}\n\nCHAT HISTORY:\n{chat_history_str}\n\nJSON OUTPUT:"
         
+        # Check for empty history
+        if not chat_history_str.strip() or len(chat_history_str) < 10:
+             return {
+                "title": "New Project", 
+                "genre": "General", 
+                "pitch": "No concept discussed yet.", 
+                "visual_style": "TBD", 
+                "target_audience": "General"
+            }
+
         # Call Gemini API
         response = model.generate_content(combined_prompt)
         

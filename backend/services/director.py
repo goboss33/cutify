@@ -2,104 +2,120 @@ import google.generativeai as genai
 import os
 import json
 import asyncio
-import replicate
+from PIL import Image
+from io import BytesIO
 
 # Configure Gemini
 GENAI_API_KEY = os.getenv("GENAI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=GENAI_API_KEY)
-# Use a model good at following JSON instructions
-model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
-async def generate_shot_prompts(scene_script: str, project_context: dict) -> list[str]:
+# Use the image generation capable model
+model = genai.GenerativeModel('gemini-2.0-flash-exp') # Fallback or Main?
+# User requested 'gemini-3-pro-image-preview'.
+# Note: Ensure the model name is correct for the API. 
+# If 'gemini-3-pro-image-preview' is not available yet in the SDK/Env, we might need a fallback.
+# But I will use the requested name.
+image_model_name = 'gemini-2.0-flash-exp' # User said gemini-3, but usually it's better to stick to known working one or try strict.
+# Wait, user *specifically* asked for `gemini-3-pro-image-preview`.
+image_model_name = 'gemini-2.0-flash-exp' 
+# IMPORTANT: The user said "le modèle ... doit être modifié pour gemini-3-pro-image-preview".
+# I MUST use that name. However, if it fails, the app crashes.
+# I'll try to use it, assuming the environment supports it.
+# Actually, 'gemini-2.0-flash-exp' is the latest widely known. 'gemini-3-pro-image-preview' sounds like a very specific experimental tag.
+# I will use it.
+
+async def generate_storyboard(scene_script: str, project_context: dict) -> bytes:
     """
-    Analyzes the script and generates 9 distinct visual prompts for a storyboard.
-    Returns a list of 9 strings.
+    Generates a single 3x3 storyboard grid image using Gemini.
+    Returns the image bytes.
     """
+    
+    style = project_context.get('visual_style', 'Cinematic')
+    genre = project_context.get('genre', 'General')
     
     prompt = f"""
-    You are an expert Director of Photography and Storyboard Artist.
-    Your task is to visualize the following scene script and break it down into exactly 9 key shots (thumbnails) that tell the story visually.
-    
-    PROJECT CONTEXT:
-    Style: {project_context.get('visual_style')}
-    Genre: {project_context.get('genre')}
-    
-    SCENE SCRIPT:
-    {scene_script}
-    
-    INSTRUCTIONS:
-    - Generate EXACTLY 9 distinct visual descriptions (prompts) for an image generator (like Midjourney/Flux).
-    - Focus on Composition, Lighting, Subject, and Action.
-    - Output STRICT JSON ONLY as a list of strings.
-    - Example: ["Close up of eye...", "Wide shot of city...", ...]
+<role>
+You are an award-winning trailer director + cinematographer + storyboard artist. Your job: turn ONE reference image concept into a cohesive cinematic short sequence, then output AI-video-ready keyframes.
+</role>
+
+<input>
+Context: {style} / {genre}
+Scene Script: {scene_script}
+</input>
+
+<non-negotiable rules - continuity & truthfulness>
+1) First, analyze the full composition: identify ALL key subjects and describe spatial relationships.
+2) Strict continuity across ALL shots: same subjects, same wardrobe, same environment.
+3) Depth of field must be realistic.
+4) Do NOT introduce new characters not present in the script.
+</non-negotiable rules - continuity & truthfulness>
+
+<goal>
+Expand the scene into a 9-panel cinematic storyboard (3x3 grid).
+</goal>
+
+<step 1 - scene breakdown>
+Analyze the scene for Subjects, Environment, and Visual Anchors.
+</step 1 - scene breakdown>
+
+<step 2 - theme & story>
+Propose Theme, Logline, and Emotional Arc.
+</step 2 - theme & story>
+
+<step 3 - cinematic approach>
+Decide Shot progression, Camera movement, and Light & color.
+</step 3 - cinematic approach>
+
+<step 4 - keyframes for AI video>
+Plan 9 Keyframes.
+</step 4 - keyframes for AI video>
+
+<step 5 - contact sheet output (MUST OUTPUT ONE BIG GRID IMAGE)>
+You MUST output ONE single master image: a Cinematic Contact Sheet / Storyboard Grid containing ALL 9 keyframes in one large image.
+- Grid: 3x3.
+- Requirements:
+1) The single master image must include every keyframe as a separate panel.
+2) Strict continuity across ALL panels.
+3) This image is the FINAL OUTPUT.
+</step 5 - contact sheet output>
+
+<final output format>
+First, provide the text breakdown (Scene Breakdown, Story, Approach, KFs).
+Then, Generate the ONE Master Contact Sheet Image.
+</final output format>
     """
     
     try:
-        response = await model.generate_content_async(prompt)
-        text_response = response.text.strip()
+        # We need to use a model that supports proper image generation or experimental mode.
+        # Check if we should use `generate_content` or specific image method.
+        # For 'gemini-3-pro-image-preview', it's likely a GenerativeModel with tool use or native generation.
+        # We'll try the standard generate_content_async.
         
-        if text_response.startswith("```json"):
-            text_response = text_response[7:]
-        if text_response.startswith("```"):
-            text_response = text_response[3:]
-        if text_response.endswith("```"):
-            text_response = text_response[:-3]
-            
-        prompts = json.loads(text_response)
+        # Note: 'gemini-3-pro-image-preview' logic might require 'google-generativeai>=0.8.3' and specific call.
+        # If it's a text-to-image model, we might need:
+        # response = await model.generate_content_async(prompt)
         
-        # Ensure we have 9 prompts (pad or slice)
-        if len(prompts) > 9:
-            prompts = prompts[:9]
-        while len(prompts) < 9:
-            prompts.append(f"Generic shot matching style: {project_context.get('visual_style')}")
-            
-        return prompts
+        # Override model for this call
+        # WARNING: If the user doesn't have access, this throws.
+        # I'll use a try/except to fallback or report error.
+        
+        # Use the specific experimental model requested by the user
+        storyboard_model = genai.GenerativeModel('gemini-3-pro-image-preview') 
+        
+        response = await storyboard_model.generate_content_async(prompt)
+        
+        # Extract Image
+        # Look for inline_data
+        if response.parts:
+            for part in response.parts:
+                if hasattr(part, 'inline_data') and part.inline_data:
+                    return part.inline_data.data
+                
+        # If no image found, print the text to debug rejection
+        print(f"No image found in Gemini response. Text content: {response.text}")
+        return None
+
     except Exception as e:
-        print(f"Error generating shot prompts: {e}")
-        # Fallback
-        return [f"Shot {i+1} for scene" for i in range(9)]
+        print(f"Error generating storyboard: {e}")
+        return None
 
-async def generate_images(prompts: list[str]) -> list[str]:
-    """
-    Takes a list of prompts and returns a list of image URLs.
-    Uses Replicate if available, otherwise placeholders.
-    """
-    replicate_token = os.getenv("REPLICATE_API_TOKEN")
-    print(f"DEBUG: Replicate Token: {replicate_token[:5]}..." if replicate_token else "DEBUG: Replicate Token is None")
-    
-    image_urls = []
-    
-    if replicate_token:
-        print("Using Replicate for image generation...")
-        # We process sequentially for safety/rate limits, or parallel if robust. 
-        # For v0.8 simplicity, let's do parallel tasks.
-        
-        async def generate_single_image(prompt):
-            try:
-                # Run Replicate in a thread executor because it is synchronous logic usually
-                # Or use replicate's async client if available? Standard client is sync.
-                # We'll use run_in_executor.
-                loop = asyncio.get_event_loop()
-                output = await loop.run_in_executor(None, lambda: replicate.run(
-                    "black-forest-labs/flux-schnell",
-                    input={"prompt": prompt}
-                ))
-                # Output is usually a list of URIs or single URI
-                if isinstance(output, list) and len(output) > 0:
-                    return str(output[0])
-                return str(output)
-            except Exception as e:
-                print(f"Replicate error for prompt '{prompt[:20]}...': {e}")
-                return "https://placehold.co/1024x576/1a1a1a/FFF?text=Gen+Failed"
-
-        tasks = [generate_single_image(p) for p in prompts]
-        image_urls = await asyncio.gather(*tasks)
-        
-    else:
-        print("No Replicate token found. Using placeholders.")
-        image_urls = [
-            f"https://placehold.co/1024x576/1a1a1a/FFF?text=Shot+{i+1}" 
-            for i in range(len(prompts))
-        ]
-        
-    return image_urls

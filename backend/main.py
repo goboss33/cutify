@@ -13,6 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from models import ChatMessageInput, ChatMessageOutput
 
 print("DEBUG: Creating FastAPI app...")
+# Create Tables if not exist
+from database import engine, Base
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI()
 
 # Configure CORS to allow requests from the frontend
@@ -58,11 +62,18 @@ async def chat_endpoint(message: ChatMessageInput):
 
 from services.concept_extractor import extract_concept_from_chat
 from services.screenwriter import generate_scenes_breakdown
-from services.screenwriter import generate_scenes_breakdown
 from services.scriptwriter import generate_scene_script
-from services.director import generate_shot_prompts, generate_images
+from services.director import generate_storyboard
+from services.image_processor import slice_grid_image
 from database import SessionLocal
 from models import ProjectDB, Project, SceneDB, Scene, ShotDB, Shot
+from fastapi.staticfiles import StaticFiles
+
+# Mount static directory
+# Ensure directory exists first
+os.makedirs("static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 def get_db():
     db = SessionLocal()
@@ -74,14 +85,20 @@ def get_db():
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from models import ExtractConceptInput
+
 @app.post("/api/extract-concept", response_model=Project)
-async def extract_concept_endpoint(db: Session = Depends(get_db)):
-    # Convert history to string
+async def extract_concept_endpoint(payload: ExtractConceptInput, db: Session = Depends(get_db)):
+    print(f"DEBUG: extract_concept called with {len(payload.messages)} messages")
+    # Convert history from payload to string
     history_str = ""
-    for msg in chat_history:
-        role = msg.get("role", "unknown")
-        text = msg.get("parts", [""])[0]
-        history_str += f"{role.upper()}: {text}\n"
+    # Payload messages are likely from frontend: {senderId, text, ...}
+    # We need to map them. frontend "senderId"='user' or 'agent'
+    
+    for msg in payload.messages:
+        role = "USER" if msg.get("senderId") != "agent" else "AGENT"
+        text = msg.get("text", "")
+        history_str += f"{role}: {text}\n"
     
     concept_dict = await extract_concept_from_chat(history_str)
     
@@ -188,37 +205,44 @@ async def generate_storyboard_endpoint(scene_id: int, db: Session = Depends(get_
         "visual_style": project.visual_style
     }
 
-    # 2. Generate Prompts (Director Agent)
+    # 2. Generate Storyboard (Director Agent)
     # Use script if available, else summary
     base_text = scene.script if scene.script else scene.summary
-    prompts = await generate_shot_prompts(base_text, project_context)
     
-    # 3. Create Placeholder Shots (Pending/Generating)
-    # Clear existing shots first? Yes for now.
+    print(f"Generating storyboard for scene {scene_id}...")
+    master_image_bytes = await generate_storyboard(base_text, project_context)
+    
+    if not master_image_bytes:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="Failed to generate storyboard image")
+        
+    # 3. Slice Image into Shots
+    print("Slicing master grid...")
+    shot_urls, master_url = slice_grid_image(master_image_bytes, output_dir="static/shots", scene_id=scene_id)
+    
+    if not shot_urls:
+         from fastapi import HTTPException
+         raise HTTPException(status_code=500, detail="Failed to slice storyboard image")
+
+    # Update Scene with master grid URL
+    scene.master_image_url = master_url # will be saved on commit
+    
+    # 4. Update DB
+    # Clear old shots
     db.query(ShotDB).filter(ShotDB.scene_id == scene_id).delete()
     
-    shots_db = []
-    for i, p in enumerate(prompts):
+    new_shots = []
+    for i, url in enumerate(shot_urls):
         shot = ShotDB(
             scene_id=scene_id,
             shot_number=i+1,
-            visual_prompt=p,
-            status="generating"
+            visual_prompt=f"Shot {i+1} (Auto-generated from grid)",
+            image_url=url, # URL is relative /static/shots/...
+            status="done"
         )
         db.add(shot)
-        shots_db.append(shot)
+        new_shots.append(shot)
     
-    db.commit()
-    
-    # 4. Generate Images (Async/Parallel) - In V1 this should be a background task
-    # For now we await it to keep UI simple
-    image_urls = await generate_images(prompts)
-    
-    # 5. Update Shots with URLs
-    for i, shot in enumerate(shots_db):
-        shot.image_url = image_urls[i]
-        shot.status = "done"
-        
     scene.status = "storyboarded"
     db.commit()
     db.refresh(scene)

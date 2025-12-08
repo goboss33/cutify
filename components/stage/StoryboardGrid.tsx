@@ -32,7 +32,7 @@ export function StoryboardGrid({ scene }: StoryboardGridProps) {
                                 </div>
                             ) : (
                                 <img
-                                    src={shot.image_url || shot.thumbnail || "https://placehold.co/600x400/1a1a1a/FFF?text=No+Image"}
+                                    src={shot.image_url?.startsWith('http') ? shot.image_url : `http://127.0.0.1:8000${shot.image_url}`}
                                     alt={shot.label || `Shot ${shot.shot_number}`}
                                     className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
                                 />
