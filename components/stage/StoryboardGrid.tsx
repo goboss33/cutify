@@ -10,7 +10,8 @@ interface StoryboardGridProps {
 
 export function StoryboardGrid({ scene }: StoryboardGridProps) {
     // Ensure we display 9 cells (3x3) even if shots are fewer
-    const displayShots = Array.from({ length: 9 }).map((_, i) => scene.shots[i] || null);
+    const shots = scene.shots || [];
+    const displayShots = Array.from({ length: 9 }).map((_, i) => shots[i] || null);
 
     return (
         <div className="grid grid-cols-3 gap-3 p-1">
