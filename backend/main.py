@@ -1,3 +1,4 @@
+print("DEBUG: Starting main.py...")
 import asyncio
 import uuid
 import os
@@ -5,11 +6,13 @@ from dotenv import load_dotenv
 from datetime import datetime
 from fastapi import FastAPI
 
+print("DEBUG: Loading .env...")
 load_dotenv()
 
 from fastapi.middleware.cors import CORSMiddleware
 from models import ChatMessageInput, ChatMessageOutput
 
+print("DEBUG: Creating FastAPI app...")
 app = FastAPI()
 
 # Configure CORS to allow requests from the frontend
@@ -26,7 +29,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+print("DEBUG: Importing ai_service...")
 from services.ai_service import generate_showrunner_response
+print("DEBUG: ai_service imported.")
 
 # In-Memory Chat History
 chat_history = []
@@ -52,8 +57,9 @@ async def chat_endpoint(message: ChatMessageInput):
     )
 
 from services.concept_extractor import extract_concept_from_chat
+from services.screenwriter import generate_scenes_breakdown
 from database import SessionLocal
-from models import ProjectDB, Project
+from models import ProjectDB, Project, SceneDB, Scene
 
 def get_db():
     db = SessionLocal()
@@ -95,6 +101,46 @@ async def extract_concept_endpoint(db: Session = Depends(get_db)):
     db.refresh(new_project)
     
     return new_project
+
+@app.post("/api/projects/{project_id}/generate-scenes", response_model=list[Scene])
+async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db)):
+    # 1. Fetch Project
+    project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
+    if not project:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # 2. Call Screenwriter AI
+    project_data = {
+        "title": project.title,
+        "genre": project.genre,
+        "pitch": project.pitch,
+        "visual_style": project.visual_style
+    }
+    
+    scenes_data = await generate_scenes_breakdown(project_data)
+    
+    # 3. Save to DB
+    new_scenes = []
+    for i, scene_item in enumerate(scenes_data):
+        new_scene = SceneDB(
+            project_id=project.id,
+            sequence_order=i + 1,
+            title=scene_item.get("title", f"Scene {i+1}"),
+            summary=scene_item.get("summary", ""),
+            estimated_duration=scene_item.get("estimated_duration", ""),
+            status="pending"
+        )
+        db.add(new_scene)
+        new_scenes.append(new_scene)
+        
+    db.commit()
+    
+    # Refresh to get IDs
+    for s in new_scenes:
+        db.refresh(s)
+        
+    return new_scenes
 
 @app.get("/")
 async def root():

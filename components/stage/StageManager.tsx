@@ -15,7 +15,8 @@ export function StageManager() {
     const { isPlayerMode, setPlayerMode } = useStore();
     const { currentProject } = useProject();
 
-    if (currentProject) {
+    // Show ProjectHub only if we have a project but no scenes yet (Concept Phase)
+    if (currentProject && (!currentProject.scenes || currentProject.scenes.length === 0)) {
         return <ProjectHub />;
     }
 

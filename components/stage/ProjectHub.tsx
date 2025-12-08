@@ -5,9 +5,30 @@ import { useProject } from '@/store/ProjectContext';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Loader2, Clapperboard } from "lucide-react";
 
 export function ProjectHub() {
-    const { currentProject } = useProject();
+    const { currentProject, setScenes } = useProject();
+    const [isGenerating, setIsGenerating] = React.useState(false);
+
+    const handleGenerateScenes = async () => {
+        if (!currentProject) return;
+        setIsGenerating(true);
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}/generate-scenes`, {
+                method: "POST"
+            });
+            if (!response.ok) throw new Error("Failed to generate scenes");
+            const scenes = await response.json();
+            setScenes(scenes);
+        } catch (error) {
+            console.error(error);
+            alert("Error generating scenes");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
     if (!currentProject) return null;
 
@@ -20,9 +41,19 @@ export function ProjectHub() {
                         <h1 className="text-3xl font-bold tracking-tight text-primary">{currentProject.title}</h1>
                         <p className="text-muted-foreground">Project Overview</p>
                     </div>
-                    <Badge variant={currentProject.status === 'concept' ? 'secondary' : 'default'} className="uppercase text-sm px-3 py-1">
-                        {currentProject.status}
-                    </Badge>
+                    <div className="flex gap-3">
+                        <Button
+                            onClick={handleGenerateScenes}
+                            disabled={isGenerating}
+                            className="gap-2"
+                        >
+                            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />}
+                            Generate Scenes Breakdown
+                        </Button>
+                        <Badge variant={currentProject.status === 'concept' ? 'secondary' : 'default'} className="uppercase text-sm px-3 py-1 self-center">
+                            {currentProject.status}
+                        </Badge>
+                    </div>
                 </div>
 
                 {/* Content Grid */}
@@ -56,7 +87,7 @@ export function ProjectHub() {
                             </div>
                             <div>
                                 <h3 className="font-semibold text-sm text-foreground mb-1">Created At</h3>
-                                <p className="text-muted-foreground text-xs">{new Date(currentProject.created_at).toLocaleString()}</p>
+                                <p className="text-muted-foreground text-xs">{currentProject.created_at ? new Date(currentProject.created_at).toLocaleString() : "Just now"}</p>
                             </div>
                         </CardContent>
                     </Card>

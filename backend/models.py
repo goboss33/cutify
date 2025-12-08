@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
 
@@ -15,6 +16,21 @@ class ProjectDB(Base):
     target_audience = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="concept")
+    
+    scenes = relationship("SceneDB", back_populates="project", cascade="all, delete-orphan")
+
+class SceneDB(Base):
+    __tablename__ = "scenes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    sequence_order = Column(Integer, nullable=False)
+    title = Column(String, nullable=False)
+    summary = Column(Text, nullable=False)
+    estimated_duration = Column(String)
+    status = Column(String, default="pending")
+
+    project = relationship("ProjectDB", back_populates="scenes")
 
 # --- Pydantic Schemas ---
 class ChatMessageInput(BaseModel):
@@ -35,12 +51,30 @@ class ProjectBase(BaseModel):
     target_audience: str | None = None
     status: str = "concept"
 
+class SceneBase(BaseModel):
+    title: str
+    summary: str
+    estimated_duration: str | None = None
+    sequence_order: int | None = None
+
+class SceneCreate(SceneBase):
+    pass
+
+class Scene(SceneBase):
+    id: int
+    project_id: int
+    status: str
+
+    class Config:
+        from_attributes = True
+
 class ProjectCreate(ProjectBase):
     pass
 
 class Project(ProjectBase):
     id: int
     created_at: datetime
+    scenes: list[Scene] = []
 
     class Config:
         from_attributes = True

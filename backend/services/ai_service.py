@@ -7,14 +7,14 @@ from pathlib import Path
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-api_key = os.getenv("GOOGLE_API_KEY")
+api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GENAI_API_KEY")
 if not api_key:
     print("Warning: GOOGLE_API_KEY not found in .env")
 
 genai.configure(api_key=api_key, transport='rest')
 
 # Initialize the model
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
 SHOWRUNNER_SYSTEM_PROMPT = """You are the 'Showrunner Agent', a world-class video producer and creative director for the CUTIFY platform. 
 Your goal is to guide the user from an initial vague idea to a concrete video concept. 
@@ -42,8 +42,8 @@ async def generate_showrunner_response(user_message: str, chat_history: list = [
         
         combined_prompt = f"{SHOWRUNNER_SYSTEM_PROMPT}\n\nUser: {user_message}\nShowrunner Agent:"
         
-        # Call Gemini API synchronously (compatibility fix)
-        response = chat.send_message(combined_prompt)
+        # Call Gemini API asynchronously
+        response = await chat.send_message_async(combined_prompt)
         
         return response.text
     except Exception as e:

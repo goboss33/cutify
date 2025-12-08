@@ -1,22 +1,12 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-
-// Interface matching backend response
-export interface Project {
-    id: number;
-    title: string;
-    genre: string | null;
-    pitch: string | null;
-    visual_style: string | null;
-    target_audience: string | null;
-    created_at: string;
-    status: string;
-}
+import { Project, Scene } from '@/lib/mockData';
 
 interface ProjectContextType {
     currentProject: Project | null;
     setCurrentProject: (project: Project | null) => void;
+    setScenes: (scenes: Scene[]) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -24,8 +14,14 @@ const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [currentProject, setCurrentProject] = useState<Project | null>(null);
 
+    const setScenes = (scenes: Scene[]) => {
+        if (currentProject) {
+            setCurrentProject({ ...currentProject, scenes });
+        }
+    };
+
     return (
-        <ProjectContext.Provider value={{ currentProject, setCurrentProject }}>
+        <ProjectContext.Provider value={{ currentProject, setCurrentProject, setScenes }}>
             {children}
         </ProjectContext.Provider>
     );

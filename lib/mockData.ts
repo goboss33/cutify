@@ -6,7 +6,7 @@ export interface User {
 }
 
 export interface Message {
-    id: string;
+    id: string; // or number, backend sends int usually but we convert to string or handle mixed
     senderId: string;
     text: string;
     timestamp: string;
@@ -19,21 +19,34 @@ export interface Shot {
     status: 'pending' | 'generating' | 'done';
 }
 
+// Aligning with Backend SceneDB
 export interface Scene {
-    id: string;
+    id: number;
+    project_id?: number;
+    sequence_order?: number;
     title: string;
-    duration: string;
-    status: 'done' | 'in-progress' | 'pending';
-    shotsCount: number;
-    totalShots: number;
-    script: string;
-    shots: Shot[]; // For the storyboard grid
+    summary?: string;
+    estimated_duration?: string;
+    status: 'pending' | 'scripted' | 'storyboarded' | 'done' | 'in-progress';
+
+    // UI specific (optional or computed later)
+    shotsCount?: number;
+    totalShots?: number;
+    script?: string;
+    shots?: Shot[];
+    duration?: string; // mapping to estimated_duration
 }
 
 export interface Project {
-    id: string;
-    name: string;
-    duration: string;
+    id: number;
+    title: string;
+    genre?: string;
+    pitch?: string;
+    visual_style?: string;
+    target_audience?: string;
+    status: string;
+    created_at?: string;
+    scenes?: Scene[]; // Included in fetch
 }
 
 // MOCK DATA
@@ -52,10 +65,15 @@ export const AGENT_USER: User = {
     role: 'agent',
 };
 
+// MOCK DATA used for generic fallback or tests
 export const MOCK_PROJECT: Project = {
-    id: 'p1',
-    name: 'Neo-Noir Film',
-    duration: '2h',
+    id: 1,
+    title: 'Neo-Noir Film',
+    genre: 'Thriller',
+    pitch: 'A detective chases a shadow.',
+    visual_style: 'Dark',
+    status: 'concept',
+    scenes: []
 };
 
 export const MOCK_MESSAGES: Message[] = [];
@@ -71,7 +89,7 @@ const generateMockShots = (count: number): Shot[] => {
 
 export const MOCK_SCENES: Scene[] = [
     {
-        id: 's1',
+        id: 101,
         title: 'Scene 1: The Arrival',
         duration: '~45s',
         status: 'done',
@@ -86,7 +104,7 @@ It was the kind of night that washes away the sins of the city... or drowns them
         shots: generateMockShots(9),
     },
     {
-        id: 's2',
+        id: 102,
         title: 'Scene 2: The Meeting',
         duration: '~1m 30s',
         status: 'in-progress',
@@ -104,7 +122,7 @@ Relax. Nobody's looking at you.`,
         shots: generateMockShots(4),
     },
     {
-        id: 's3',
+        id: 103,
         title: 'Scene 3: The Chase',
         duration: '~30s',
         status: 'pending',
