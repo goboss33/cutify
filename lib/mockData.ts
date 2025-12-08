@@ -58,32 +58,7 @@ export const MOCK_PROJECT: Project = {
     duration: '2h',
 };
 
-export const MOCK_MESSAGES: Message[] = [
-    {
-        id: 'm1',
-        senderId: 'a1',
-        text: 'Salut! Ready to work on Scene 1?',
-        timestamp: '10:00 AM',
-    },
-    {
-        id: 'm2',
-        senderId: 'u1',
-        text: 'Yes, let\'s focus on the rainy mood.',
-        timestamp: '10:01 AM',
-    },
-    {
-        id: 'm3',
-        senderId: 'a1',
-        text: 'Understood. I have prepared a draft with high contrast lighting.',
-        timestamp: '10:01 AM',
-    },
-    {
-        id: 'm4',
-        senderId: 'a1',
-        text: 'Check the storyboard for the "Arrival" scene.',
-        timestamp: '10:02 AM',
-    },
-];
+export const MOCK_MESSAGES: Message[] = [];
 
 const generateMockShots = (count: number): Shot[] => {
     return Array.from({ length: count }).map((_, i) => ({
