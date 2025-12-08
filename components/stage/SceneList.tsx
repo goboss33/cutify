@@ -33,7 +33,7 @@ export function SceneList() {
                 </div>
             </div>
 
-            <ScrollArea className="flex-1">
+            <div className="flex-1">
                 <Accordion type="single" collapsible className="w-full p-4 space-y-4">
                     {MOCK_SCENES.map((scene) => (
                         <AccordionItem
@@ -95,7 +95,7 @@ export function SceneList() {
                         </AccordionItem>
                     ))}
                 </Accordion>
-            </ScrollArea>
+            </div>
         </div>
     );
 }

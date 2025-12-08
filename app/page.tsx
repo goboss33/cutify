@@ -11,7 +11,7 @@ export default function Home() {
       </div>
 
       {/* ZONE B: STAGE & SCENE MANAGER (Top Right) */}
-      <div className="border-b border-border">
+      <div className="border-b border-border h-full overflow-y-auto">
         <StageManager />
       </div>
 

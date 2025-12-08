@@ -20,7 +20,7 @@ export function StageManager() {
     }
 
     return (
-        <main className="bg-background h-full flex flex-col overflow-hidden relative">
+        <main className="bg-background h-full flex flex-col relative">
             {/* Mode Switcher (Floating or Fixed header?) PRD says "Stage & Scene Manager ... toggled by a button" */}
             {/* I'll put it in a top bar or overlay. Let's put it in a top bar combined with breadcrumbs or just a floater. 
           PRD Image 1 shows a "Vue Liste des Scenes" title and maybe controls.
@@ -54,7 +54,7 @@ export function StageManager() {
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-hidden relative">
+            <div className="flex-1 relative">
                 {isPlayerMode ? <PlayerView /> : <SceneList />}
             </div>
         </main>
