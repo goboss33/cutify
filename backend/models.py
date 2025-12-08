@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from sqlalchemy import Column, Integer, String, Text, DateTime
 from datetime import datetime
-from backend.database import Base
+from database import Base
 
 # --- SQLAlchemy Models ---
 class ProjectDB(Base):

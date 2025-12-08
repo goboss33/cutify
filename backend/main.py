@@ -8,7 +8,7 @@ from fastapi import FastAPI
 load_dotenv()
 
 from fastapi.middleware.cors import CORSMiddleware
-from backend.models import ChatMessageInput, ChatMessageOutput
+from models import ChatMessageInput, ChatMessageOutput
 
 app = FastAPI()
 
@@ -26,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from backend.services.ai_service import generate_showrunner_response
+from services.ai_service import generate_showrunner_response
 
 # In-Memory Chat History
 chat_history = []
@@ -51,9 +51,9 @@ async def chat_endpoint(message: ChatMessageInput):
         timestamp=datetime.now().isoformat()
     )
 
-from backend.services.concept_extractor import extract_concept_from_chat
-from backend.database import SessionLocal
-from backend.models import ProjectDB, Project
+from services.concept_extractor import extract_concept_from_chat
+from database import SessionLocal
+from models import ProjectDB, Project
 
 def get_db():
     db = SessionLocal()
@@ -98,4 +98,4 @@ async def extract_concept_endpoint(db: Session = Depends(get_db)):
 
 @app.get("/")
 async def root():
-    return {"message": "Cutify Backend v0.4 is running"}
+    return {"message": "Cutify Backend v0.5 is running"}
