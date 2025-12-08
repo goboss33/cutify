@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   description: "Professional AI-augmented video creation studio",
 };
 
+import { ProjectProvider } from "@/store/ProjectContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,7 +29,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <ProjectProvider>
+          {children}
+        </ProjectProvider>
       </body>
     </html>
   );

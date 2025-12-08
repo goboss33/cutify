@@ -1,7 +1,12 @@
 import asyncio
 import uuid
+import os
+from dotenv import load_dotenv
 from datetime import datetime
 from fastapi import FastAPI
+
+load_dotenv()
+
 from fastapi.middleware.cors import CORSMiddleware
 from backend.models import ChatMessageInput, ChatMessageOutput
 
@@ -47,9 +52,21 @@ async def chat_endpoint(message: ChatMessageInput):
     )
 
 from backend.services.concept_extractor import extract_concept_from_chat
+from backend.database import SessionLocal
+from backend.models import ProjectDB, Project
 
-@app.post("/api/extract-concept")
-async def extract_concept_endpoint():
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+@app.post("/api/extract-concept", response_model=Project)
+async def extract_concept_endpoint(db: Session = Depends(get_db)):
     # Convert history to string
     history_str = ""
     for msg in chat_history:
@@ -57,8 +74,27 @@ async def extract_concept_endpoint():
         text = msg.get("parts", [""])[0]
         history_str += f"{role.upper()}: {text}\n"
     
-    concept = await extract_concept_from_chat(history_str)
-    return concept
+    concept_dict = await extract_concept_from_chat(history_str)
+    
+    # Save to DB
+    # Note: concept_dict might not match ProjectDB exactly if keys differ. 
+    # concept_extractor usually returns dict with keys like 'title', 'pitch', etc.
+    # We should map them safely.
+    
+    new_project = ProjectDB(
+        title=concept_dict.get("title", "Untitled Project"),
+        genre=concept_dict.get("genre"),
+        pitch=concept_dict.get("pitch"),
+        visual_style=concept_dict.get("visual_style"),
+        target_audience=concept_dict.get("target_audience"),
+        status="concept"
+    )
+    
+    db.add(new_project)
+    db.commit()
+    db.refresh(new_project)
+    
+    return new_project
 
 @app.get("/")
 async def root():

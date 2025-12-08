@@ -8,8 +8,16 @@ import { Button } from "@/components/ui/button";
 import { LayoutGrid, PlayCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { ProjectHub } from "./ProjectHub";
+import { useProject } from "@/store/ProjectContext";
+
 export function StageManager() {
     const { isPlayerMode, setPlayerMode } = useStore();
+    const { currentProject } = useProject();
+
+    if (currentProject) {
+        return <ProjectHub />;
+    }
 
     return (
         <main className="bg-background h-full flex flex-col overflow-hidden relative">

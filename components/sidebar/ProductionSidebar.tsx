@@ -21,10 +21,12 @@ import {
     Message,
 } from "@/lib/mockData";
 import { useStore } from "@/store/useStore";
+import { useProject } from "@/store/ProjectContext";
 import { cn } from "@/lib/utils";
 
 export function ProductionSidebar() {
     const { activeTab, setActiveTab } = useStore();
+    const { currentProject, setCurrentProject } = useProject();
     const [messages, setMessages] = React.useState<Message[]>(MOCK_MESSAGES);
     const [inputValue, setInputValue] = React.useState("");
     const [isLoading, setIsLoading] = React.useState(false);
@@ -89,7 +91,8 @@ export function ProductionSidebar() {
                 method: "POST",
             });
             const data = await response.json();
-            alert("Concept Validated!\n\n" + JSON.stringify(data, null, 2));
+            // alert("Concept Validated!\n\n" + JSON.stringify(data, null, 2));
+            setCurrentProject(data);
         } catch (error) {
             console.error("Extraction error:", error);
             alert("Failed to validate concept.");
@@ -108,7 +111,7 @@ export function ProductionSidebar() {
                     </div>
                     <div className="flex flex-col overflow-hidden">
                         <span className="font-semibold truncate text-sm">
-                            {MOCK_PROJECT.name}
+                            {currentProject ? currentProject.title : MOCK_PROJECT.name}
                         </span>
                         <span className="text-xs text-muted-foreground">
                             {MOCK_PROJECT.duration}
