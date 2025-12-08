@@ -58,6 +58,7 @@ async def chat_endpoint(message: ChatMessageInput):
 
 from services.concept_extractor import extract_concept_from_chat
 from services.screenwriter import generate_scenes_breakdown
+from services.scriptwriter import generate_scene_script
 from database import SessionLocal
 from models import ProjectDB, Project, SceneDB, Scene
 
@@ -141,6 +142,34 @@ async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db
         db.refresh(s)
         
     return new_scenes
+
+@app.post("/api/scenes/{scene_id}/generate-script", response_model=Scene)
+async def generate_script_endpoint(scene_id: int, db: Session = Depends(get_db)):
+    # 1. Fetch Scene and Project
+    scene = db.query(SceneDB).filter(SceneDB.id == scene_id).first()
+    if not scene:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Scene not found")
+        
+    project = db.query(ProjectDB).filter(ProjectDB.id == scene.project_id).first()
+    
+    # 2. Prepare Context
+    project_context = {
+        "title": project.title,
+        "genre": project.genre,
+        "visual_style": project.visual_style
+    }
+    
+    # 3. Call Scriptwriter AI
+    script_content = await generate_scene_script(scene.title, scene.summary, project_context)
+    
+    # 4. Update DB
+    scene.script = script_content
+    scene.status = "scripted"
+    db.commit()
+    db.refresh(scene)
+    
+    return scene
 
 @app.get("/")
 async def root():

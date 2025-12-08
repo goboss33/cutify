@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
     Accordion,
     AccordionContent,
@@ -10,17 +10,46 @@ import {
 import { MOCK_SCENES, Scene } from "@/lib/mockData";
 import { useProject } from "@/store/ProjectContext";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge"; // Using badge styled div if badge not installed, but standard Shadcn usually has it. wait, I didn't install badge. I'll make a custom one.
-import { Textarea } from "@/components/ui/textarea"; // Didn't install textarea. I'll use standard textarea or install. Standard for now.
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { StoryboardGrid } from "./StoryboardGrid";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Filter, List } from "lucide-react";
+import { Filter, List, PenTool, Loader2 } from "lucide-react";
 
 export function SceneList() {
-    const { currentProject } = useProject();
+    const { currentProject, setScenes } = useProject();
     // If no project selected, show Mock. If project selected, show its scenes (even if empty? ProjectHub handles empty state usually).
     const scenes = currentProject ? (currentProject.scenes || []) : MOCK_SCENES;
+
+    const [generatingScriptIds, setGeneratingScriptIds] = useState<Set<number>>(new Set());
+
+    const handleGenerateScript = async (sceneId: number) => {
+        if (!currentProject) return;
+
+        setGeneratingScriptIds(prev => new Set(prev).add(sceneId));
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/api/scenes/${sceneId}/generate-script`, {
+                method: "POST"
+            });
+            if (!response.ok) throw new Error("Failed to generate script");
+            const updatedScene = await response.json();
+
+            // Update state
+            const updatedScenes = scenes.map(s => s.id === updatedScene.id ? updatedScene : s);
+            setScenes(updatedScenes);
+
+        } catch (error) {
+            console.error(error);
+            alert("Error generating script");
+        } finally {
+            setGeneratingScriptIds(prev => {
+                const next = new Set(prev);
+                next.delete(sceneId);
+                return next;
+            });
+        }
+    };
 
     return (
         <div className="flex flex-col h-full bg-background overflow-hidden relative">
@@ -83,10 +112,23 @@ export function SceneList() {
                                 <div className="flex flex-col gap-6 p-6">
                                     {/* Script Editor */}
                                     <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Scene Summary / Script</label>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Scene Summary / Script</label>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 gap-2 text-xs"
+                                                disabled={generatingScriptIds.has(scene.id) || !!scene.script}
+                                                onClick={() => handleGenerateScript(scene.id)}
+                                            >
+                                                {generatingScriptIds.has(scene.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <PenTool className="h-3 w-3" />}
+                                                {scene.script ? "Script Generated" : "Write Script with AI"}
+                                            </Button>
+                                        </div>
                                         <textarea
-                                            className="w-full min-h-[120px] bg-neutral-900/50 border border-border rounded-md p-4 text-sm font-mono text-neutral-300 resize-y focus:outline-none focus:ring-1 focus:ring-primary"
-                                            defaultValue={scene.summary || scene.script || ""}
+                                            className="w-full min-h-[150px] bg-neutral-900/50 border border-border rounded-md p-4 text-sm font-mono text-neutral-300 resize-y focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+                                            defaultValue={scene.script || scene.summary || ""}
+                                            key={scene.script ? 'script' : 'summary'} // Force re-render if switching from summary to script
                                         />
                                     </div>
 
