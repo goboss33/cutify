@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { StoryboardGrid } from "./StoryboardGrid";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Filter, List, PenTool, Loader2 } from "lucide-react";
+import { Filter, List, PenTool, Loader2, Camera } from "lucide-react";
 
 export function SceneList() {
     const { currentProject, setScenes } = useProject();
@@ -23,6 +23,7 @@ export function SceneList() {
     const scenes = currentProject ? (currentProject.scenes || []) : MOCK_SCENES;
 
     const [generatingScriptIds, setGeneratingScriptIds] = useState<Set<number>>(new Set());
+    const [generatingStoryboardIds, setGeneratingStoryboardIds] = useState<Set<number>>(new Set());
 
     const handleGenerateScript = async (sceneId: number) => {
         if (!currentProject) return;
@@ -44,6 +45,33 @@ export function SceneList() {
             alert("Error generating script");
         } finally {
             setGeneratingScriptIds(prev => {
+                const next = new Set(prev);
+                next.delete(sceneId);
+                return next;
+            });
+        }
+    };
+
+    const handleGenerateStoryboard = async (sceneId: number) => {
+        if (!currentProject) return;
+
+        setGeneratingStoryboardIds(prev => new Set(prev).add(sceneId));
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/api/scenes/${sceneId}/generate-storyboard`, {
+                method: "POST"
+            });
+            if (!response.ok) throw new Error("Failed to generate storyboard");
+            const updatedScene = await response.json();
+
+            // Update state
+            const updatedScenes = scenes.map(s => s.id === updatedScene.id ? updatedScene : s);
+            setScenes(updatedScenes);
+
+        } catch (error) {
+            console.error(error);
+            alert("Error generating storyboard");
+        } finally {
+            setGeneratingStoryboardIds(prev => {
                 const next = new Set(prev);
                 next.delete(sceneId);
                 return next;
@@ -80,8 +108,8 @@ export function SceneList() {
                                     {/* Status Indicator */}
                                     <div className={cn(
                                         "h-2 w-2 rounded-full shrink-0",
-                                        scene.status === 'done' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" :
-                                            scene.status === 'in-progress' ? "bg-amber-500" :
+                                        scene.status === 'done' || scene.status === 'storyboarded' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" :
+                                            scene.status === 'in-progress' || scene.status === 'scripted' ? "bg-amber-500" :
                                                 "bg-neutral-600"
                                     )} />
 
@@ -91,19 +119,19 @@ export function SceneList() {
                                         <div className="text-xs text-muted-foreground flex gap-3 font-mono">
                                             <span>{scene.estimated_duration || scene.duration || "N/A"}</span>
                                             <span className={cn(
-                                                scene.status === 'done' ? "text-green-500" :
-                                                    scene.status === 'in-progress' ? "text-amber-500" : ""
+                                                scene.status === 'done' || scene.status === 'storyboarded' ? "text-green-500" :
+                                                    scene.status === 'in-progress' || scene.status === 'scripted' ? "text-amber-500" : ""
                                             )}>
-                                                {scene.status === 'done' ? `Done [${scene.shotsCount}/${scene.totalShots} shots]` :
-                                                    scene.status === 'in-progress' ? `In Progress [${scene.shotsCount}/${scene.totalShots} shots]` :
-                                                        `Pending [0/${scene.totalShots} shots]`}
+                                                {scene.status === 'storyboarded' ? `Ready [${scene.shots?.length || 0} shots]` :
+                                                    scene.status === 'scripted' ? "Scripted" :
+                                                        "Pending"}
                                             </span>
                                         </div>
                                     </div>
 
                                     {/* Right side thumbnail (visible when collapsed usually, but accordions hide content. We can put a thumb in trigger if we want) */}
                                     <div className="hidden sm:block h-10 w-16 bg-neutral-800 rounded bg-cover bg-center shrink-0 border border-white/10"
-                                        style={{ backgroundImage: scene.shots && scene.shots[0] ? `url(${scene.shots[0].thumbnail})` : 'none' }}
+                                        style={{ backgroundImage: scene.shots && scene.shots[0] ? `url(${scene.shots[0].thumbnail || scene.shots[0].image_url})` : 'none' }}
                                     />
                                 </div>
                             </AccordionTrigger>
@@ -134,7 +162,19 @@ export function SceneList() {
 
                                     {/* Storyboard */}
                                     <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Storyboard Interpretation</label>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Storyboard Interpretation</label>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 gap-2 text-xs"
+                                                disabled={generatingStoryboardIds.has(scene.id) || !scene.script}
+                                                onClick={() => handleGenerateStoryboard(scene.id)}
+                                            >
+                                                {generatingStoryboardIds.has(scene.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                                                {scene.shots && scene.shots.length > 0 ? "Regenerate Storyboard" : "Generate Storyboard"}
+                                            </Button>
+                                        </div>
                                         <StoryboardGrid scene={scene} />
                                     </div>
                                 </div>

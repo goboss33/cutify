@@ -13,10 +13,14 @@ export interface Message {
 }
 
 export interface Shot {
-    id: string;
-    label: string; // e.g. "Plan 1 - Wide"
-    thumbnail: string;
-    status: 'pending' | 'generating' | 'done';
+    id: number; // Changed to number to match ID
+    scene_id: number;
+    shot_number: number;
+    visual_prompt: string;
+    image_url?: string;
+    status: 'pending' | 'generating' | 'done' | 'failed';
+    thumbnail?: string; // fallback UI prop if needed, or map image_url to it
+    label?: string; // UI prop
 }
 
 // Aligning with Backend SceneDB
@@ -80,10 +84,14 @@ export const MOCK_MESSAGES: Message[] = [];
 
 const generateMockShots = (count: number): Shot[] => {
     return Array.from({ length: count }).map((_, i) => ({
-        id: `shot-${i}`,
+        id: i + 1,
+        scene_id: 0,
+        shot_number: i + 1,
+        visual_prompt: `Mock prompt for shot ${i + 1}`,
+        image_url: 'https://placehold.co/600x400/1a1a1a/FFF?text=Shot+' + (i + 1),
+        status: 'done',
         label: `Plan ${i + 1} - ${i % 2 === 0 ? 'Wide' : 'Close-up'}`,
         thumbnail: 'https://placehold.co/600x400/1a1a1a/FFF?text=Shot+' + (i + 1),
-        status: 'done',
     }));
 };
 

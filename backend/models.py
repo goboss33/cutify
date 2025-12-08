@@ -32,6 +32,19 @@ class SceneDB(Base):
     status = Column(String, default="pending")
 
     project = relationship("ProjectDB", back_populates="scenes")
+    shots = relationship("ShotDB", back_populates="scene", cascade="all, delete-orphan")
+
+class ShotDB(Base):
+    __tablename__ = "shots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scene_id = Column(Integer, ForeignKey("scenes.id"))
+    shot_number = Column(Integer, nullable=False)
+    visual_prompt = Column(Text, nullable=False)
+    image_url = Column(String, nullable=True)
+    status = Column(String, default="generating")
+
+    scene = relationship("SceneDB", back_populates="shots")
 
 # --- Pydantic Schemas ---
 class ChatMessageInput(BaseModel):
@@ -66,6 +79,20 @@ class Scene(SceneBase):
     id: int
     project_id: int
     status: str
+    shots: list["Shot"] = []
+
+    class Config:
+        from_attributes = True
+
+class ShotBase(BaseModel):
+    shot_number: int
+    visual_prompt: str
+    image_url: str | None = None
+    status: str = "generating"
+
+class Shot(ShotBase):
+    id: int
+    scene_id: int
 
     class Config:
         from_attributes = True

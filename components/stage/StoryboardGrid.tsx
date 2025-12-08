@@ -23,15 +23,24 @@ export function StoryboardGrid({ scene }: StoryboardGridProps) {
                     {shot ? (
                         <>
                             {/* Image */}
-                            <img
-                                src={shot.thumbnail}
-                                alt={shot.label}
-                                className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                            />
+                            {shot.status === 'generating' ? (
+                                <div className="w-full h-full flex items-center justify-center bg-neutral-900">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+                                        <span className="text-xs text-muted-foreground">Generating...</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <img
+                                    src={shot.image_url || shot.thumbnail || "https://placehold.co/600x400/1a1a1a/FFF?text=No+Image"}
+                                    alt={shot.label || `Shot ${shot.shot_number}`}
+                                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                />
+                            )}
 
                             {/* Label */}
                             <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-2 text-xs truncate border-t border-white/10 backdrop-blur-sm">
-                                <span className="font-medium">{shot.label}</span>
+                                <span className="font-medium">{shot.label || `Shot ${shot.shot_number}`}</span>
                             </div>
 
                             {/* Hover Actions */}
@@ -46,7 +55,7 @@ export function StoryboardGrid({ scene }: StoryboardGridProps) {
                         </>
                     ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-neutral-600">
-                            <span className="text-xs uppercase font-bold tracking-wider opacity-50">Empty Slot</span>
+                            <span className="text-xs uppercase font-bold tracking-wider opacity-50">Empty</span>
                         </div>
                     )}
                 </Card>

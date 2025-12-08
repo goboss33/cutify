@@ -58,9 +58,11 @@ async def chat_endpoint(message: ChatMessageInput):
 
 from services.concept_extractor import extract_concept_from_chat
 from services.screenwriter import generate_scenes_breakdown
+from services.screenwriter import generate_scenes_breakdown
 from services.scriptwriter import generate_scene_script
+from services.director import generate_shot_prompts, generate_images
 from database import SessionLocal
-from models import ProjectDB, Project, SceneDB, Scene
+from models import ProjectDB, Project, SceneDB, Scene, ShotDB, Shot
 
 def get_db():
     db = SessionLocal()
@@ -166,6 +168,58 @@ async def generate_script_endpoint(scene_id: int, db: Session = Depends(get_db))
     # 4. Update DB
     scene.script = script_content
     scene.status = "scripted"
+    db.commit()
+    db.refresh(scene)
+    
+    return scene
+
+@app.post("/api/scenes/{scene_id}/generate-storyboard", response_model=Scene)
+async def generate_storyboard_endpoint(scene_id: int, db: Session = Depends(get_db)):
+    # 1. Fetch Scene
+    scene = db.query(SceneDB).filter(SceneDB.id == scene_id).first()
+    if not scene:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Scene not found")
+        
+    project = db.query(ProjectDB).filter(ProjectDB.id == scene.project_id).first()
+    project_context = {
+        "title": project.title,
+        "genre": project.genre,
+        "visual_style": project.visual_style
+    }
+
+    # 2. Generate Prompts (Director Agent)
+    # Use script if available, else summary
+    base_text = scene.script if scene.script else scene.summary
+    prompts = await generate_shot_prompts(base_text, project_context)
+    
+    # 3. Create Placeholder Shots (Pending/Generating)
+    # Clear existing shots first? Yes for now.
+    db.query(ShotDB).filter(ShotDB.scene_id == scene_id).delete()
+    
+    shots_db = []
+    for i, p in enumerate(prompts):
+        shot = ShotDB(
+            scene_id=scene_id,
+            shot_number=i+1,
+            visual_prompt=p,
+            status="generating"
+        )
+        db.add(shot)
+        shots_db.append(shot)
+    
+    db.commit()
+    
+    # 4. Generate Images (Async/Parallel) - In V1 this should be a background task
+    # For now we await it to keep UI simple
+    image_urls = await generate_images(prompts)
+    
+    # 5. Update Shots with URLs
+    for i, shot in enumerate(shots_db):
+        shot.image_url = image_urls[i]
+        shot.status = "done"
+        
+    scene.status = "storyboarded"
     db.commit()
     db.refresh(scene)
     
