@@ -25,6 +25,78 @@ import { cn } from "@/lib/utils";
 
 export function ProductionSidebar() {
     const { activeTab, setActiveTab } = useStore();
+    const [messages, setMessages] = React.useState<Message[]>(MOCK_MESSAGES);
+    const [inputValue, setInputValue] = React.useState("");
+    const [isLoading, setIsLoading] = React.useState(false);
+    const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    React.useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    const handleSendMessage = async (e?: React.FormEvent) => {
+        e?.preventDefault();
+        if (!inputValue.trim() || isLoading) return;
+
+        const userText = inputValue.trim();
+        setInputValue("");
+        setIsLoading(true);
+
+        // Optimistic update
+        const userMsg: Message = {
+            id: Date.now().toString(),
+            senderId: CURRENT_USER.id,
+            text: userText,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages((prev) => [...prev, userMsg]);
+
+        try {
+            const response = await fetch("http://127.0.0.1:8000/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content: userText }),
+            });
+
+            if (!response.ok) throw new Error("Failed to send message");
+
+            const data = await response.json();
+
+            const agentMsg: Message = {
+                id: data.id,
+                senderId: "agent", // defined in mockData or just string, backend returns "role": "agent"
+                text: data.content,
+                timestamp: new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+
+            setMessages((prev) => [...prev, agentMsg]);
+        } catch (error) {
+            console.error("Error sending message:", error);
+            // Optionally add an error message to chat
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleValidateConcept = async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch("http://127.0.0.1:8000/api/extract-concept", {
+                method: "POST",
+            });
+            const data = await response.json();
+            alert("Concept Validated!\n\n" + JSON.stringify(data, null, 2));
+        } catch (error) {
+            console.error("Extraction error:", error);
+            alert("Failed to validate concept.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
         <aside className="border-r border-border bg-sidebar flex flex-col h-full text-sidebar-foreground">
@@ -69,7 +141,7 @@ export function ProductionSidebar() {
                     {/* Chat Body */}
                     <ScrollArea className="flex-1 p-4">
                         <div className="flex flex-col gap-4">
-                            {MOCK_MESSAGES.map((msg: Message) => {
+                            {messages.map((msg) => {
                                 const isMe = msg.senderId === CURRENT_USER.id;
                                 return (
                                     <div
@@ -101,32 +173,57 @@ export function ProductionSidebar() {
                                     </div>
                                 );
                             })}
+                            {isLoading && (
+                                <div className="flex gap-3 max-w-[90%]">
+                                    <Avatar className="h-8 w-8 shrink-0">
+                                        <AvatarImage src="/avatars/agent.jpg" />
+                                        <AvatarFallback>AI</AvatarFallback>
+                                    </Avatar>
+                                    <div className="bg-muted text-foreground rounded-lg p-3 text-sm flex items-center gap-2">
+                                        <div className="animate-pulse w-2 h-2 bg-foreground/50 rounded-full"></div>
+                                        <div className="animate-pulse w-2 h-2 bg-foreground/50 rounded-full delay-75"></div>
+                                        <div className="animate-pulse w-2 h-2 bg-foreground/50 rounded-full delay-150"></div>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
                         </div>
                     </ScrollArea>
 
                     {/* Input Area */}
-                    <div className="p-4 border-t border-border mt-auto shrink-0 bg-sidebar/50 backdrop-blur-sm">
+                    <div className="p-4 border-t border-border mt-auto shrink-0 bg-sidebar/50 backdrop-blur-sm space-y-2">
+                        {messages.length > 2 && (
+                            <Button
+                                variant="outline"
+                                className="w-full text-xs h-7 border-dashed border-primary/50 text-primary hover:bg-primary/10"
+                                onClick={handleValidateConcept}
+                                disabled={isLoading}
+                            >
+                                ✨ Validate Concept
+                            </Button>
+                        )}
                         <form
                             className="flex gap-2"
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                // Handle submit
-                            }}
+                            onSubmit={handleSendMessage}
                         >
                             <div className="relative flex-1">
                                 <Input
-                                    placeholder="Write a message..."
+                                    placeholder={isLoading ? "Waiting for response..." : "Write a message..."}
                                     className="pr-10 bg-background/50"
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
+                                    disabled={isLoading}
                                 />
                                 <Button
                                     variant="ghost"
                                     size="icon"
+                                    type="button"
                                     className="absolute right-0 top-0 h-full text-muted-foreground hover:text-foreground"
                                 >
                                     <Paperclip className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <Button type="submit" size="icon">
+                            <Button type="submit" size="icon" disabled={isLoading || !inputValue.trim()}>
                                 <Send className="h-4 w-4" />
                             </Button>
                         </form>
