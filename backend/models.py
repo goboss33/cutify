@@ -16,6 +16,7 @@ class ProjectDB(Base):
     target_audience = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="concept")
+    user_id = Column(String, index=True, nullable=True) # ID from Supabase Auth
     
     scenes = relationship("SceneDB", back_populates="project", cascade="all, delete-orphan")
     chat_history = relationship("ChatMessageDB", back_populates="project", cascade="all, delete-orphan")

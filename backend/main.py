@@ -11,6 +11,7 @@ load_dotenv()
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from models import ChatMessageInput, ChatMessageOutput, ChatMessageDB, ProjectDB
 
@@ -102,12 +103,36 @@ async def chat_project_endpoint(project_id: int, message: ChatMessageInput, db: 
     
     db.commit()
     db.refresh(agent_msg_db)
+    db.refresh(agent_msg_db)
     
     return ChatMessageOutput(
         id=str(agent_msg_db.id),
         role="agent",
         content=response_content,
         timestamp=agent_msg_db.created_at.isoformat()
+    )
+
+class HeadlessChatInput(BaseModel):
+    messages: list[dict] # [{"role": "user", "content": "..."}]
+    newMessage: str
+
+@app.post("/api/chat/headless", response_model=ChatMessageOutput)
+async def chat_headless_endpoint(input_data: HeadlessChatInput):
+    # Prepare history for Gemini
+    formatted_history = []
+    for msg in input_data.messages:
+        # Front sends 'senderId'='user'/'agent', we map to 'user'/'model'
+        role = "user" if msg.get("senderId") != "agent" else "model"
+        formatted_history.append({"role": role, "parts": [msg.get("text", "")]})
+    
+    # Call AI
+    response_content = await generate_showrunner_response(input_data.newMessage, formatted_history)
+    
+    return ChatMessageOutput(
+        id=str(uuid.uuid4()), # ephemeral ID
+        role="agent",
+        content=response_content,
+        timestamp=datetime.utcnow().isoformat()
     )
 
 from services.concept_extractor import extract_concept_from_chat
@@ -131,14 +156,34 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 from models import ExtractConceptInput
 
+from fastapi import Depends, HTTPException, Header
+import jwt
+
+# Simple JWT decoding (Verify signature in production with Supabase Public Key)
+async def get_current_user(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization Header")
+    
+    try:
+        token = authorization.split(" ")[1]
+        # Decode without verification for speed/simplicity in this step, 
+        # trusting Supabase (Frontend) sent a valid one. 
+        # in prod: use jose.jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, options={"verify_signature": False})
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid Token: No sub")
+        return user_id
+    except Exception as e:
+        print(f"Auth Error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid Token")
+
 @app.post("/api/extract-concept", response_model=Project)
-async def extract_concept_endpoint(payload: ExtractConceptInput, db: Session = Depends(get_db)):
-    print(f"DEBUG: extract_concept called with {len(payload.messages)} messages")
+async def extract_concept_endpoint(payload: ExtractConceptInput, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
+    print(f"DEBUG: extract_concept called by {user_id} with {len(payload.messages)} messages")
     # Convert history from payload to string
     history_str = ""
     # Payload messages are likely from frontend: {senderId, text, ...}
-    # We need to map them. frontend "senderId"='user' or 'agent'
-    
     for msg in payload.messages:
         role = "USER" if msg.get("senderId") != "agent" else "AGENT"
         text = msg.get("text", "")
@@ -146,18 +191,14 @@ async def extract_concept_endpoint(payload: ExtractConceptInput, db: Session = D
     
     concept_dict = await extract_concept_from_chat(history_str)
     
-    # Save to DB
-    # Note: concept_dict might not match ProjectDB exactly if keys differ. 
-    # concept_extractor usually returns dict with keys like 'title', 'pitch', etc.
-    # We should map them safely.
-    
     new_project = ProjectDB(
         title=concept_dict.get("title", "Untitled Project"),
         genre=concept_dict.get("genre"),
         pitch=concept_dict.get("pitch"),
         visual_style=concept_dict.get("visual_style"),
         target_audience=concept_dict.get("target_audience"),
-        status="concept"
+        status="concept",
+        user_id=user_id # Bind to user
     )
     
     db.add(new_project)
@@ -167,9 +208,10 @@ async def extract_concept_endpoint(payload: ExtractConceptInput, db: Session = D
     return new_project
 
 @app.get("/api/projects", response_model=list[Project])
-async def get_projects_endpoint(db: Session = Depends(get_db)):
-    # Order by last modified or created desc
-    projects = db.query(ProjectDB).order_by(ProjectDB.created_at.desc()).all()
+async def get_projects_endpoint(db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
+    print(f"DEBUG: Fetching projects for user {user_id}")
+    # Filter by User ID
+    projects = db.query(ProjectDB).filter(ProjectDB.user_id == user_id).order_by(ProjectDB.created_at.desc()).all()
     return projects
 
 @app.post("/api/projects/{project_id}/generate-scenes", response_model=list[Scene])

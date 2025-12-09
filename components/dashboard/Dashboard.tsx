@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Folder, Calendar, Film } from "lucide-react";
 import { useProject } from "@/store/ProjectContext";
 import { useStore } from "@/store/useStore";
+import { createClient } from "@/lib/supabase/client"; // Added import
 import { formatDistanceToNow } from "date-fns"; // Make sure to install or use raw date
 
 // Simple date formatter if date-fns not installed
@@ -31,16 +32,32 @@ export function Dashboard() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch("http://127.0.0.1:8000/api/projects")
-            .then(res => res.json())
-            .then(data => {
-                setProjects(data);
-                setLoading(false);
+        const fetchProjects = async () => {
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (!session?.access_token) return;
+
+            fetch("http://127.0.0.1:8000/api/projects", {
+                headers: {
+                    "Authorization": `Bearer ${session.access_token}`
+                }
             })
-            .catch(err => {
-                console.error("Failed to fetch projects", err);
-                setLoading(false);
-            });
+                .then(res => {
+                    if (!res.ok) throw new Error("Failed to fetch");
+                    return res.json();
+                })
+                .then(data => {
+                    setProjects(data);
+                    setLoading(false);
+                })
+                .catch(err => {
+                    console.error("Failed to fetch projects", err);
+                    setLoading(false);
+                });
+        };
+
+        fetchProjects();
     }, []);
 
     const handleNewProject = () => {

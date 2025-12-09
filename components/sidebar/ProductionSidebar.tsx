@@ -71,7 +71,7 @@ export function ProductionSidebar() {
     const handleSendMessage = async (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!inputValue.trim() || isLoading) return;
-        if (!currentProject?.id) {
+        if (currentProject?.id === undefined || currentProject?.id === null) {
             alert("No project selected.");
             return;
         }
@@ -89,10 +89,56 @@ export function ProductionSidebar() {
         };
         setMessages((prev) => [...prev, userMsg]);
 
+        if (currentProject.id === 0) {
+            // Stateless Chat (Concept Phase)
+            try {
+                // Send history + new message to headless endpoint
+                const response = await fetch("http://127.0.0.1:8000/api/chat/headless", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        messages: messages, // Send full history for context
+                        newMessage: userText
+                    }),
+                });
+
+                if (!response.ok) throw new Error("Failed to send message");
+                const data = await response.json();
+
+                const agentMsg: Message = {
+                    id: data.id,
+                    senderId: "agent",
+                    text: data.content,
+                    timestamp: new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                };
+                setMessages((prev) => [...prev, agentMsg]);
+            } catch (error) {
+                console.error("Error sending headless message:", error);
+                const errorMsg: Message = {
+                    id: Date.now().toString(),
+                    senderId: "agent",
+                    text: "Error: Could not reach the agent.",
+                    timestamp: new Date().toLocaleTimeString()
+                };
+                setMessages((prev) => [...prev, errorMsg]);
+            } finally {
+                setIsLoading(false);
+            }
+            return;
+        }
+
+        // Standard Project Chat
         try {
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+
             const response = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}/chat`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": token ? `Bearer ${token}` : ""
+                },
                 body: JSON.stringify({ content: userText }),
             });
 
@@ -131,9 +177,20 @@ export function ProductionSidebar() {
     const handleValidateConcept = async () => {
         setIsLoading(true);
         try {
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (!session?.access_token) {
+                alert("You must be logged in to create a project.");
+                return;
+            }
+
             const response = await fetch("http://127.0.0.1:8000/api/extract-concept", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${session.access_token}`
+                },
                 body: JSON.stringify({ messages: messages }),
             });
             if (!response.ok) {

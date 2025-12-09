@@ -11,3 +11,4 @@ requests
 Pillow
 psycopg2-binary
 supabase
+PyJWT
