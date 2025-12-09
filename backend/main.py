@@ -166,6 +166,12 @@ async def extract_concept_endpoint(payload: ExtractConceptInput, db: Session = D
     
     return new_project
 
+@app.get("/api/projects", response_model=list[Project])
+async def get_projects_endpoint(db: Session = Depends(get_db)):
+    # Order by last modified or created desc
+    projects = db.query(ProjectDB).order_by(ProjectDB.created_at.desc()).all()
+    return projects
+
 @app.post("/api/projects/{project_id}/generate-scenes", response_model=list[Scene])
 async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db)):
     # 1. Fetch Project

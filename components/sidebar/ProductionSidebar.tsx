@@ -25,6 +25,7 @@ import { useProject } from "@/store/ProjectContext";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { UserProfile } from "./UserProfile";
 
 export function ProductionSidebar() {
     const { activeTab, setActiveTab } = useStore();
@@ -167,8 +168,8 @@ export function ProductionSidebar() {
                         </span>
                     </div>
                 </div>
-                <Button variant="ghost" size="icon" className="shrink-0" onClick={handleLogout} title="Sign Out">
-                    <LogOut className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setCurrentProject(null)} title="Back to Dashboard">
+                    <LogOut className="h-4 w-4 rotate-180" /> {/* Using LogOut icon reversed as 'Exit Project' */}
                 </Button>
             </div>
 
@@ -193,66 +194,60 @@ export function ProductionSidebar() {
                     {/* Chat Body */}
                     <ScrollArea className="flex-1 p-4">
                         <div className="flex flex-col gap-4">
-                            {!currentProject && (
+                            {!currentProject ? (
                                 <div className="text-center text-muted-foreground text-sm p-4">
-                                    Please create or select a project to start chatting.
-                                    {/* Temporary button to force create a project for testing */}
-                                    <Button
-                                        variant="outline"
-                                        className="mt-2"
-                                        onClick={() => setCurrentProject(MOCK_PROJECT)}
-                                    >
-                                        Load Demo Project
-                                    </Button>
+                                    Select a project from the Dashboard.
                                 </div>
-                            )}
-
-                            {messages.map((msg) => {
-                                const isMe = msg.senderId === CURRENT_USER.id;
-                                return (
-                                    <div
-                                        key={msg.id}
-                                        className={cn(
-                                            "flex gap-3 max-w-[90%]",
-                                            isMe ? "ml-auto flex-row-reverse" : ""
-                                        )}
-                                    >
-                                        {!isMe && (
+                            ) : (
+                                <>
+                                    {messages.map((msg) => {
+                                        const isMe = msg.senderId === CURRENT_USER.id;
+                                        return (
+                                            <div
+                                                key={msg.id}
+                                                className={cn(
+                                                    "flex gap-3 max-w-[90%]",
+                                                    isMe ? "ml-auto flex-row-reverse" : ""
+                                                )}
+                                            >
+                                                {!isMe && (
+                                                    <Avatar className="h-8 w-8 shrink-0">
+                                                        <AvatarImage src="/avatars/agent.jpg" />
+                                                        <AvatarFallback>AI</AvatarFallback>
+                                                    </Avatar>
+                                                )}
+                                                <div
+                                                    className={cn(
+                                                        "rounded-lg p-3 text-sm",
+                                                        isMe
+                                                            ? "bg-primary text-primary-foreground"
+                                                            : "bg-muted text-foreground"
+                                                    )}
+                                                >
+                                                    <p>{msg.text}</p>
+                                                    <span className="text-[10px] opacity-50 mt-1 block">
+                                                        {msg.timestamp}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {isLoading && (
+                                        <div className="flex gap-3 max-w-[90%]">
                                             <Avatar className="h-8 w-8 shrink-0">
                                                 <AvatarImage src="/avatars/agent.jpg" />
                                                 <AvatarFallback>AI</AvatarFallback>
                                             </Avatar>
-                                        )}
-                                        <div
-                                            className={cn(
-                                                "rounded-lg p-3 text-sm",
-                                                isMe
-                                                    ? "bg-primary text-primary-foreground"
-                                                    : "bg-muted text-foreground"
-                                            )}
-                                        >
-                                            <p>{msg.text}</p>
-                                            <span className="text-[10px] opacity-50 mt-1 block">
-                                                {msg.timestamp}
-                                            </span>
+                                            <div className="bg-muted text-foreground rounded-lg p-3 text-sm flex items-center gap-2">
+                                                <div className="animate-pulse w-2 h-2 bg-foreground/50 rounded-full"></div>
+                                                <div className="animate-pulse w-2 h-2 bg-foreground/50 rounded-full delay-75"></div>
+                                                <div className="animate-pulse w-2 h-2 bg-foreground/50 rounded-full delay-150"></div>
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
-                            {isLoading && (
-                                <div className="flex gap-3 max-w-[90%]">
-                                    <Avatar className="h-8 w-8 shrink-0">
-                                        <AvatarImage src="/avatars/agent.jpg" />
-                                        <AvatarFallback>AI</AvatarFallback>
-                                    </Avatar>
-                                    <div className="bg-muted text-foreground rounded-lg p-3 text-sm flex items-center gap-2">
-                                        <div className="animate-pulse w-2 h-2 bg-foreground/50 rounded-full"></div>
-                                        <div className="animate-pulse w-2 h-2 bg-foreground/50 rounded-full delay-75"></div>
-                                        <div className="animate-pulse w-2 h-2 bg-foreground/50 rounded-full delay-150"></div>
-                                    </div>
-                                </div>
+                                    )}
+                                    <div ref={messagesEndRef} />
+                                </>
                             )}
-                            <div ref={messagesEndRef} />
                         </div>
                     </ScrollArea>
 
@@ -293,6 +288,8 @@ export function ProductionSidebar() {
                     </div>
                 </TabsContent>
             </Tabs>
+
+            <UserProfile />
         </aside>
     );
 }
