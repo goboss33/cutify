@@ -10,12 +10,20 @@ print("DEBUG: Loading .env...")
 load_dotenv()
 
 from fastapi.middleware.cors import CORSMiddleware
-from models import ChatMessageInput, ChatMessageOutput
+from fastapi import Depends, HTTPException
+from sqlalchemy.orm import Session
+from models import ChatMessageInput, ChatMessageOutput, ChatMessageDB, ProjectDB
 
-print("DEBUG: Creating FastAPI app...")
 # Create Tables if not exist
-from database import engine, Base
+from database import engine, Base, SessionLocal
 Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 app = FastAPI()
 
@@ -37,27 +45,69 @@ print("DEBUG: Importing ai_service...")
 from services.ai_service import generate_showrunner_response
 print("DEBUG: ai_service imported.")
 
-# In-Memory Chat History
-chat_history = []
+# Global chat_history removed in favor of DB persistence per project
 
-@app.post("/api/chat", response_model=ChatMessageOutput)
-async def chat_endpoint(message: ChatMessageInput):
-    # Pass history to AI Service
-    # Note: We append the new user message *after* context is established? 
-    # Actually, Gemini start_chat expects history of PREVIOUS turns.
-    # So we pass current `chat_history`.
+@app.get("/api/projects/{project_id}/chat", response_model=list[ChatMessageOutput])
+async def get_chat_history_endpoint(project_id: int, db: Session = Depends(get_db)):
+    # Fetch History from DB
+    history_records = db.query(ChatMessageDB).filter(ChatMessageDB.project_id == project_id).order_by(ChatMessageDB.created_at.asc()).limit(100).all()
     
-    response_content = await generate_showrunner_response(message.content, chat_history)
+    output = []
+    for record in history_records:
+        output.append(ChatMessageOutput(
+            id=str(record.id),
+            role="agent" if record.role != "user" else "user", # map 'model'/'agent' -> 'agent', 'user'->'user'
+            content=record.content,
+            timestamp=record.created_at.isoformat()
+        ))
+    return output
+
+@app.post("/api/projects/{project_id}/chat", response_model=ChatMessageOutput)
+async def chat_project_endpoint(project_id: int, message: ChatMessageInput, db: Session = Depends(get_db)):
+    # 1. Verify Project
+    project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
+    if not project:
+         from fastapi import HTTPException
+         raise HTTPException(status_code=404, detail="Project not found")
+
+    # 2. Fetch History from DB (Last 50 messages to keep context manageable)
+    # Order by created_at ascending for the AI
+    history_records = db.query(ChatMessageDB).filter(ChatMessageDB.project_id == project_id).order_by(ChatMessageDB.created_at.asc()).limit(50).all()
     
-    # Update History
-    chat_history.append({"role": "user", "parts": [message.content]})
-    chat_history.append({"role": "model", "parts": [response_content]})
+    # Convert to format expected by Gemini (list of dicts with 'role' and 'parts')
+    # Our DB stores role as 'user'/'agent', Gemini expects 'user'/'model'
+    formatted_history = []
+    for record in history_records:
+        gemini_role = "user" if record.role == "user" else "model"
+        formatted_history.append({"role": gemini_role, "parts": [record.content]})
+
+    # 3. Call AI Service
+    response_content = await generate_showrunner_response(message.content, formatted_history)
+    
+    # 4. Save User Message
+    user_msg_db = ChatMessageDB(
+        project_id=project_id,
+        role="user",
+        content=message.content
+    )
+    db.add(user_msg_db)
+    
+    # 5. Save Agent Response
+    agent_msg_db = ChatMessageDB(
+        project_id=project_id,
+        role="agent",
+        content=response_content
+    )
+    db.add(agent_msg_db)
+    
+    db.commit()
+    db.refresh(agent_msg_db)
     
     return ChatMessageOutput(
-        id=str(uuid.uuid4()),
+        id=str(agent_msg_db.id),
         role="agent",
         content=response_content,
-        timestamp=datetime.now().isoformat()
+        timestamp=agent_msg_db.created_at.isoformat()
     )
 
 from services.concept_extractor import extract_concept_from_chat
@@ -75,15 +125,9 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
-from fastapi import Depends
-from sqlalchemy.orm import Session
+
+
 
 from models import ExtractConceptInput
 

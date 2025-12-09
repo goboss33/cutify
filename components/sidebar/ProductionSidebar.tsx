@@ -12,7 +12,7 @@ import {
     Paperclip,
     Send,
     MoreHorizontal,
-    Folder,
+    LogOut,
 } from "lucide-react";
 import {
     MOCK_PROJECT,
@@ -23,18 +23,45 @@ import {
 import { useStore } from "@/store/useStore";
 import { useProject } from "@/store/ProjectContext";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 export function ProductionSidebar() {
     const { activeTab, setActiveTab } = useStore();
     const { currentProject, setCurrentProject } = useProject();
-    const [messages, setMessages] = React.useState<Message[]>(MOCK_MESSAGES);
+    const [messages, setMessages] = React.useState<Message[]>([]);
     const [inputValue, setInputValue] = React.useState("");
     const [isLoading, setIsLoading] = React.useState(false);
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
+    const router = useRouter();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
+
+    // Load History when Project Changes
+    React.useEffect(() => {
+        if (!currentProject?.id) return;
+
+        setIsLoading(true);
+        fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}/chat`)
+            .then(res => res.json())
+            .then(data => {
+                // Map backend format to frontend Message
+                // Backend: { id, role, content, timestamp }
+                // Frontend: { id, senderId, text, timestamp }
+                const mapped: Message[] = data.map((d: any) => ({
+                    id: d.id,
+                    senderId: d.role === "agent" ? "agent" : CURRENT_USER.id,
+                    text: d.content,
+                    timestamp: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }));
+                setMessages(mapped);
+            })
+            .catch(err => console.error("Failed to load history", err))
+            .finally(() => setIsLoading(false));
+
+    }, [currentProject?.id]);
 
     React.useEffect(() => {
         scrollToBottom();
@@ -43,6 +70,10 @@ export function ProductionSidebar() {
     const handleSendMessage = async (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!inputValue.trim() || isLoading) return;
+        if (!currentProject?.id) {
+            alert("No project selected.");
+            return;
+        }
 
         const userText = inputValue.trim();
         setInputValue("");
@@ -58,7 +89,7 @@ export function ProductionSidebar() {
         setMessages((prev) => [...prev, userMsg]);
 
         try {
-            const response = await fetch("http://127.0.0.1:8000/api/chat", {
+            const response = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ content: userText }),
@@ -70,7 +101,7 @@ export function ProductionSidebar() {
 
             const agentMsg: Message = {
                 id: data.id,
-                senderId: "agent", // defined in mockData or just string, backend returns "role": "agent"
+                senderId: "agent",
                 text: data.content,
                 timestamp: new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
@@ -78,10 +109,22 @@ export function ProductionSidebar() {
             setMessages((prev) => [...prev, agentMsg]);
         } catch (error) {
             console.error("Error sending message:", error);
-            // Optionally add an error message to chat
+            const errorMsg: Message = {
+                id: Date.now().toString(),
+                senderId: "agent",
+                text: "Error: Could not reach the agent.",
+                timestamp: new Date().toLocaleTimeString()
+            };
+            setMessages((prev) => [...prev, errorMsg]);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleLogout = async () => {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+        router.refresh();
     };
 
     const handleValidateConcept = async () => {
@@ -97,8 +140,8 @@ export function ProductionSidebar() {
                 throw new Error(`Server Error ${response.status}: ${errText}`);
             }
             const data = await response.json();
-            // alert("Concept Validated!\n\n" + JSON.stringify(data, null, 2));
             setCurrentProject(data);
+            alert(`Project "${data.title}" validated and created!`);
         } catch (error: any) {
             console.error("Extraction error:", error);
             alert("Failed to validate concept.\n" + error.message);
@@ -117,15 +160,15 @@ export function ProductionSidebar() {
                     </div>
                     <div className="flex flex-col overflow-hidden">
                         <span className="font-semibold truncate text-sm">
-                            {currentProject ? currentProject.title : MOCK_PROJECT.name}
+                            {currentProject ? currentProject.title : "No Project"}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                            {MOCK_PROJECT.duration}
+                            {/* MOCK_PROJECT.duration */}
                         </span>
                     </div>
                 </div>
-                <Button variant="ghost" size="icon" className="shrink-0">
-                    <MoreHorizontal className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="shrink-0" onClick={handleLogout} title="Sign Out">
+                    <LogOut className="h-4 w-4" />
                 </Button>
             </div>
 
@@ -150,6 +193,20 @@ export function ProductionSidebar() {
                     {/* Chat Body */}
                     <ScrollArea className="flex-1 p-4">
                         <div className="flex flex-col gap-4">
+                            {!currentProject && (
+                                <div className="text-center text-muted-foreground text-sm p-4">
+                                    Please create or select a project to start chatting.
+                                    {/* Temporary button to force create a project for testing */}
+                                    <Button
+                                        variant="outline"
+                                        className="mt-2"
+                                        onClick={() => setCurrentProject(MOCK_PROJECT)}
+                                    >
+                                        Load Demo Project
+                                    </Button>
+                                </div>
+                            )}
+
                             {messages.map((msg) => {
                                 const isMe = msg.senderId === CURRENT_USER.id;
                                 return (
@@ -201,7 +258,7 @@ export function ProductionSidebar() {
 
                     {/* Input Area */}
                     <div className="p-4 border-t border-border mt-auto shrink-0 bg-sidebar/50 backdrop-blur-sm space-y-2">
-                        {messages.length > 2 && (
+                        {messages.length > 2 && currentProject && currentProject.id === 0 && ( // Only for unsaved concepts
                             <Button
                                 variant="outline"
                                 className="w-full text-xs h-7 border-dashed border-primary/50 text-primary hover:bg-primary/10"
@@ -217,22 +274,14 @@ export function ProductionSidebar() {
                         >
                             <div className="relative flex-1">
                                 <Input
-                                    placeholder={isLoading ? "Waiting for response..." : "Write a message..."}
+                                    placeholder={isLoading ? "Waiting..." : "Write a message..."}
                                     className="pr-10 bg-background/50"
                                     value={inputValue}
                                     onChange={(e) => setInputValue(e.target.value)}
-                                    disabled={isLoading}
+                                    disabled={isLoading || !currentProject}
                                 />
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    type="button"
-                                    className="absolute right-0 top-0 h-full text-muted-foreground hover:text-foreground"
-                                >
-                                    <Paperclip className="h-4 w-4" />
-                                </Button>
                             </div>
-                            <Button type="submit" size="icon" disabled={isLoading || !inputValue.trim()}>
+                            <Button type="submit" size="icon" disabled={isLoading || !inputValue.trim() || !currentProject}>
                                 <Send className="h-4 w-4" />
                             </Button>
                         </form>

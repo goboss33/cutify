@@ -18,6 +18,7 @@ class ProjectDB(Base):
     status = Column(String, default="concept")
     
     scenes = relationship("SceneDB", back_populates="project", cascade="all, delete-orphan")
+    chat_history = relationship("ChatMessageDB", back_populates="project", cascade="all, delete-orphan")
 
 class SceneDB(Base):
     __tablename__ = "scenes"
@@ -46,6 +47,17 @@ class ShotDB(Base):
     status = Column(String, default="generating")
 
     scene = relationship("SceneDB", back_populates="shots")
+
+class ChatMessageDB(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    role = Column(String, nullable=False)  # 'user' or 'model'
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("ProjectDB", back_populates="chat_history")
 
 # --- Pydantic Schemas ---
 class ChatMessageInput(BaseModel):
