@@ -29,7 +29,7 @@ export default function Home() {
   }
 
   return (
-    <div className="grid h-screen w-screen grid-cols-[300px_1fr] grid-rows-[65%_35%] bg-background text-foreground overflow-hidden">
+    <div className="grid h-screen w-screen grid-cols-[300px_1fr] grid-rows-[1fr_auto] bg-background text-foreground overflow-hidden">
       {/* ZONE A: SIDEBAR (Left, fixed width) */}
       <div className="row-span-2 border-r border-border">
         <ProductionSidebar />

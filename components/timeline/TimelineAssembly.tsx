@@ -11,7 +11,7 @@ import {
 
 export function TimelineAssembly() {
     return (
-        <section className="flex flex-col h-full bg-[#0a0a0a] text-xs select-none">
+        <section className="flex flex-col h-64 bg-[#0a0a0a] text-xs select-none border-t border-border">
             {/* Timeline Header */}
             <div className="h-10 border-b border-white/10 flex items-center justify-between px-4 bg-neutral-900">
                 <div className="flex items-center gap-4 text-neutral-400">
