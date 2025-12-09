@@ -179,7 +179,12 @@ export function SceneList() {
                                                     size="sm"
                                                     variant="ghost"
                                                     className="h-7 gap-2 text-xs"
-                                                    onClick={() => window.open(`http://127.0.0.1:8000${scene.master_image_url}`, '_blank')}
+                                                    onClick={() => {
+                                                        const url = scene.master_image_url?.startsWith("http")
+                                                            ? scene.master_image_url
+                                                            : `http://127.0.0.1:8000${scene.master_image_url}`;
+                                                        window.open(url, '_blank');
+                                                    }}
                                                 >
                                                     <Filter className="h-3 w-3" /> View Source Grid
                                                 </Button>
