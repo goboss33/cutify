@@ -34,6 +34,18 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
 function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, generatingScriptIds, generatingStoryboardIds, onDelete }: any) {
     const {
         attributes,
@@ -64,32 +76,34 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
                     </div>
 
                     <AccordionTrigger className="px-4 py-4 hover:no-underline hover:bg-muted/50 transition-colors flex-1">
-                        <div className="flex items-center gap-4 w-full text-left">
-                            {/* Status Indicator */}
-                            <div className={cn(
-                                "h-2 w-2 rounded-full shrink-0",
-                                scene.status === 'done' || scene.status === 'storyboarded' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" :
-                                    scene.status === 'in-progress' || scene.status === 'scripted' ? "bg-amber-500" :
-                                        "bg-neutral-600"
-                            )} />
+                        <div className="flex items-center justify-between w-full flex-1 gap-4">
+                            <div className="flex items-center gap-4 min-w-0 flex-1">
+                                {/* Status Indicator */}
+                                <div className={cn(
+                                    "h-2 w-2 rounded-full shrink-0",
+                                    scene.status === 'done' || scene.status === 'storyboarded' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" :
+                                        scene.status === 'in-progress' || scene.status === 'scripted' ? "bg-amber-500" :
+                                            "bg-neutral-600"
+                                )} />
 
-                            {/* Title & Stats */}
-                            <div className="flex-1">
-                                <h3 className="text-lg font-semibold leading-none mb-1">{scene.title}</h3>
-                                <div className="text-xs text-muted-foreground flex gap-3 font-mono">
-                                    <span>{scene.estimated_duration || scene.duration || "N/A"}</span>
-                                    <span className={cn(
-                                        scene.status === 'done' || scene.status === 'storyboarded' ? "text-green-500" :
-                                            scene.status === 'in-progress' || scene.status === 'scripted' ? "text-amber-500" : ""
-                                    )}>
-                                        {scene.status === 'storyboarded' ? `Ready [${scene.shots?.length || 0} shots]` :
-                                            scene.status === 'scripted' ? "Scripted" :
-                                                "Pending"}
-                                    </span>
+                                {/* Title & Stats */}
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-lg font-semibold leading-none mb-1 truncate">{scene.title}</h3>
+                                    <div className="text-xs text-muted-foreground flex gap-3 font-mono">
+                                        <span>{scene.estimated_duration || scene.duration || "N/A"}</span>
+                                        <span className={cn(
+                                            scene.status === 'done' || scene.status === 'storyboarded' ? "text-green-500" :
+                                                scene.status === 'in-progress' || scene.status === 'scripted' ? "text-amber-500" : ""
+                                        )}>
+                                            {scene.status === 'storyboarded' ? `Ready [${scene.shots?.length || 0} shots]` :
+                                                scene.status === 'scripted' ? "Scripted" :
+                                                    "Pending"}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Right side thumbnail */}
+                            {/* Right side thumbnail - Pushed to right */}
                             <div className="hidden sm:block h-10 w-16 bg-neutral-800 rounded bg-cover bg-center shrink-0 border border-white/10"
                                 style={{ backgroundImage: scene.shots && scene.shots[0] ? `url(${scene.shots[0].image_url?.startsWith('http') ? scene.shots[0].image_url : `http://127.0.0.1:8000${scene.shots[0].image_url}`})` : 'none' }}
                             />
@@ -98,14 +112,37 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
 
                     {/* Delete Button */}
                     <div className="px-3 border-l border-border/50 flex items-center">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive transition-colors"
-                            onClick={(e) => {
-                                e.stopPropagation(); // Prevent Accordion Toggle
-                                if (confirm("Delete this scene?")) onDelete(scene.id);
-                            }}
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive transition-colors"
+                                    onClick={(e) => {
+                                        e.stopPropagation(); // Just prevent accordion, let Dialog open
+                                    }}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Scene?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Are you sure you want to delete "{scene.title}"? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        className="bg-destructive hover:bg-destructive/90"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onDelete(scene.id);
+                                        }}
+                                    >
+                                        Delete
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                     </div>
                 </div>
 
