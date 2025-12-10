@@ -18,7 +18,7 @@ class ProjectDB(Base):
     status = Column(String, default="concept")
     user_id = Column(String, index=True, nullable=True) # ID from Supabase Auth
     
-    scenes = relationship("SceneDB", back_populates="project", cascade="all, delete-orphan")
+    scenes = relationship("SceneDB", back_populates="project", cascade="all, delete-orphan", order_by="SceneDB.sequence_order")
     chat_history = relationship("ChatMessageDB", back_populates="project", cascade="all, delete-orphan")
 
 class SceneDB(Base):
@@ -70,6 +70,7 @@ class ChatMessageOutput(BaseModel):
     role: str # "agent"
     content: str
     timestamp: str
+    action_taken: bool = False
 
 class ExtractConceptInput(BaseModel):
     messages: list[dict] # Simplified dict list, or reuse strict schema if valid

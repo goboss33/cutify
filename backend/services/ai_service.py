@@ -16,36 +16,85 @@ genai.configure(api_key=api_key, transport='rest')
 # Initialize the model
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
+from sqlalchemy.orm import Session
+from services.tools import update_project_details, add_scene, delete_scene, reorder_scenes
+
 SHOWRUNNER_SYSTEM_PROMPT = """You are the 'Showrunner Agent', a world-class video producer and creative director for the CUTIFY platform. 
 Your goal is to guide the user from an initial vague idea to a concrete video concept. 
 You are professional, creative, and encouraging. 
 Always ask clarifying questions if the user's request is unclear. 
-Keep responses concise and focused on video production."""
+Keep responses concise and focused on video production.
 
-async def generate_showrunner_response(user_message: str, chat_history: list = []) -> str:
+You have access to tools to modify the project directly. use them when the user asks for changes.
+"""
+
+async def generate_showrunner_response(user_message: str, chat_history: list = [], db: Session = None, project_id: int = None) -> tuple[str, bool]:
     """
     Generates a response using Gemini Pro with the Showrunner persona.
+    Returns: (text_response, action_taken_flag)
     """
     try:
         if not api_key:
-             return "Error: GOOGLE_API_KEY not found. Please check backend/.env."
+             return "Error: GOOGLE_API_KEY not found. Please check backend/.env.", False
 
-        # Initialize chat with history
-        chat = model.start_chat(history=chat_history)
+        # --- Tool Configuration ---
+        tools_config = []
         
-        # Send new message with system prompt context if it's the start, 
-        # but robustly we just send the message as the persona is implied or we prepend it.
-        # Gemini start_chat history must be role/parts.
-        # We will prepend the system prompt to the current message to enforce personas 
-        # or rely on the history having the context if we were flexible. 
-        # For v0.4, we'll keep the system prompt prepended for strong direction.
+        # We define closures/functions that match the signature Gemini sees (without db/project_id)
+        # But we need them to execute with the current db/project_id.
         
-        combined_prompt = f"{SHOWRUNNER_SYSTEM_PROMPT}\n\nUser: {user_message}\nShowrunner Agent:"
+        # NOTE: Google GenAI Python SDK's `enable_automatic_function_calling` might struggle with 
+        # closures if not strictly typed or global. To be robust, we'll wrap them in a helper 
+        # that binds the context if we were doing manual dispatch, OR we update the main Loop.
         
-        # Call Gemini API asynchronously
+        # For simplicity with the standard SDK, we provide the functions specifically tailored.
+        # But wait, we can't easily curry 'db' into them for the SDK's auto-call 
+        # effectively unless we define them inside here and pass them.
+        
+        # Let's try defining them here.
+        
+        action_taken_container = {"flag": False}
+        tools_to_pass = None
+
+        if db and project_id and project_id != 0:
+            def update_project_metadata(title: str = None, genre: str = None, pitch: str = None, visual_style: str = None, target_audience: str = None):
+                """Updates the project's title, genre, pitch, visual style, or target audience."""
+                action_taken_container["flag"] = True
+                return update_project_details(db, project_id, title, genre, pitch, visual_style, target_audience)
+
+            def add_new_scene(title: str, summary: str = ""):
+                """Adds a new scene to the end of the project. If summary is not provided, uses a default."""
+                action_taken_container["flag"] = True
+                return add_scene(db, project_id, title, summary)
+            
+            def delete_existing_scene(scene_id_or_title_or_sequence: str):
+                """Deletes a scene by Sequence Number (e.g. '2'), ID, or title."""
+                action_taken_container["flag"] = True
+                return delete_scene(db, project_id, scene_id_or_title_or_sequence)
+
+            def move_scene(scene_query: str, target_position: int):
+                """Moves a scene (found by Sequence Number or Title) to a new numeric position."""
+                action_taken_container["flag"] = True
+                return reorder_scenes(db, project_id, scene_query, target_position)
+            
+            tools_to_pass = [update_project_metadata, add_new_scene, delete_existing_scene, move_scene]
+
+        # Initialize model for this request (to bind tools properly)
+        # We use the same model name
+        if tools_to_pass:
+            active_model = genai.GenerativeModel('gemini-2.0-flash-exp', tools=tools_to_pass)
+            chat = active_model.start_chat(history=chat_history, enable_automatic_function_calling=True)
+        else:
+            active_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            chat = active_model.start_chat(history=chat_history)
+        
+        combined_prompt = f"{SHOWRUNNER_SYSTEM_PROMPT}\n\nUser: {user_message}"
+        
+        # Send message (SDK handles tool loop if enabled)
         response = await chat.send_message_async(combined_prompt)
         
-        return response.text
+        return response.text, action_taken_container["flag"]
+
     except Exception as e:
         print(f"Error calling Gemini API: {e}")
-        return f"I'm having trouble connecting to my creative brain right now. Error details: {str(e)}"
+        return f"I'm having trouble connecting to my creative brain right now. Error details: {str(e)}", False

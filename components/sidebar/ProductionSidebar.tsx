@@ -146,6 +146,32 @@ export function ProductionSidebar() {
 
             const data = await response.json();
 
+            // Agentic Refresh Logic
+            if (data.action_taken) {
+                console.log("Agent performed an action. Refreshing project data...");
+                // Fetch updated project data
+                try {
+                    const projectRes = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}`, {
+                        headers: {
+                            "Authorization": token ? `Bearer ${token}` : ""
+                        }
+                    });
+                    if (projectRes.ok) {
+                        const updatedProject = await projectRes.json();
+                        // Preserve local state if needed, but for now full replace is safer for deep changes
+                        // Ensure we don't lose scenes if backend sends them, or we merge them?
+                        // Backend Project model includes 'scenes' normally if relation lazy loading is handled or default.
+                        // Our get_project_endpoint returns the ProjectDB.
+                        // SQLAlchemy default loading might NOT include 'scenes' relationship unless joinedload is used or accessed.
+                        // If 'scenes' is missing in response, we might lose them in context.
+                        // Let's assume we merge:
+                        setCurrentProject({ ...currentProject, ...updatedProject });
+                    }
+                } catch (refreshErr) {
+                    console.error("Failed to refresh project:", refreshErr);
+                }
+            }
+
             const agentMsg: Message = {
                 id: data.id,
                 senderId: "agent",
@@ -216,10 +242,38 @@ export function ProductionSidebar() {
                     <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center shrink-0">
                         <span className="font-bold text-primary-foreground">C</span>
                     </div>
-                    <div className="flex flex-col overflow-hidden">
-                        <span className="font-semibold truncate text-sm">
-                            {currentProject ? currentProject.title : "No Project"}
-                        </span>
+                    <div className="flex flex-col overflow-hidden w-full">
+                        {currentProject && currentProject.id !== 0 ? (
+                            <input
+                                className="font-semibold truncate text-sm bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-primary rounded px-1 -ml-1 w-full"
+                                value={currentProject.title}
+                                onChange={(e) => setCurrentProject({ ...currentProject, title: e.target.value })}
+                                onBlur={async (e) => {
+                                    // Save on blur
+                                    if (!currentProject.id) return;
+                                    try {
+                                        const response = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}`, {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ title: e.target.value })
+                                        });
+                                        if (!response.ok) {
+                                            console.error("Failed to update title");
+                                            // Revert or show error? For now simple log.
+                                        }
+                                    } catch (err) {
+                                        console.error(err);
+                                    }
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') e.currentTarget.blur();
+                                }}
+                            />
+                        ) : (
+                            <span className="font-semibold truncate text-sm">
+                                {currentProject ? currentProject.title : "No Project"}
+                            </span>
+                        )}
                         <span className="text-xs text-muted-foreground">
                             {/* MOCK_PROJECT.duration */}
                         </span>

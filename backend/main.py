@@ -83,7 +83,8 @@ async def chat_project_endpoint(project_id: int, message: ChatMessageInput, db: 
         formatted_history.append({"role": gemini_role, "parts": [record.content]})
 
     # 3. Call AI Service
-    response_content = await generate_showrunner_response(message.content, formatted_history)
+    # Pass DB and ProjectID to allow Tool Use
+    response_content, action_taken = await generate_showrunner_response(message.content, formatted_history, db=db, project_id=project_id)
     
     # 4. Save User Message
     user_msg_db = ChatMessageDB(
@@ -103,13 +104,14 @@ async def chat_project_endpoint(project_id: int, message: ChatMessageInput, db: 
     
     db.commit()
     db.refresh(agent_msg_db)
-    db.refresh(agent_msg_db)
+    db.refresh(agent_msg_db) # Double refresh safety not really needed but ok
     
     return ChatMessageOutput(
         id=str(agent_msg_db.id),
         role="agent",
         content=response_content,
-        timestamp=agent_msg_db.created_at.isoformat()
+        timestamp=agent_msg_db.created_at.isoformat(),
+        action_taken=action_taken
     )
 
 class HeadlessChatInput(BaseModel):
@@ -125,14 +127,15 @@ async def chat_headless_endpoint(input_data: HeadlessChatInput):
         role = "user" if msg.get("senderId") != "agent" else "model"
         formatted_history.append({"role": role, "parts": [msg.get("text", "")]})
     
-    # Call AI
-    response_content = await generate_showrunner_response(input_data.newMessage, formatted_history)
+    # Call AI (No DB context for headless)
+    response_content, _ = await generate_showrunner_response(input_data.newMessage, formatted_history)
     
     return ChatMessageOutput(
         id=str(uuid.uuid4()), # ephemeral ID
         role="agent",
         content=response_content,
-        timestamp=datetime.utcnow().isoformat()
+        timestamp=datetime.utcnow().isoformat(),
+        action_taken=False
     )
 
 from services.concept_extractor import extract_concept_from_chat
@@ -213,6 +216,72 @@ async def get_projects_endpoint(db: Session = Depends(get_db), user_id: str = De
     # Filter by User ID
     projects = db.query(ProjectDB).filter(ProjectDB.user_id == user_id).order_by(ProjectDB.created_at.desc()).all()
     return projects
+
+@app.get("/api/projects/{project_id}", response_model=Project)
+async def get_project_endpoint(project_id: int, db: Session = Depends(get_db)):
+    # Verify owner if needed, but for now simple fetch
+    project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
+    if not project:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+class ProjectUpdate(BaseModel):
+    title: str | None = None
+    genre: str | None = None
+    pitch: str | None = None
+    visual_style: str | None = None
+    target_audience: str | None = None
+
+@app.patch("/api/projects/{project_id}", response_model=Project)
+async def update_project_endpoint(project_id: int, update_data: ProjectUpdate, db: Session = Depends(get_db)):
+    project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
+    if not project:
+         from fastapi import HTTPException
+         raise HTTPException(status_code=404, detail="Project not found")
+    
+    if update_data.title:
+        project.title = update_data.title
+    if update_data.genre:
+        project.genre = update_data.genre
+    if update_data.pitch:
+        project.pitch = update_data.pitch
+    if update_data.visual_style:
+        project.visual_style = update_data.visual_style
+    if update_data.target_audience:
+        project.target_audience = update_data.target_audience
+        
+    db.commit()
+    db.refresh(project)
+    return project
+
+class CreateSceneInput(BaseModel):
+    title: str
+    summary: str = ""
+
+@app.post("/api/projects/{project_id}/scenes/simple", response_model=Scene)
+async def create_simple_scene_endpoint(project_id: int, input_data: CreateSceneInput, db: Session = Depends(get_db)):
+    # Verify Project
+    project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
+    if not project:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Find last sequence order
+    last_scene = db.query(SceneDB).filter(SceneDB.project_id == project_id).order_by(SceneDB.sequence_order.desc()).first()
+    new_order = (last_scene.sequence_order + 1) if last_scene else 1
+    
+    new_scene = SceneDB(
+        project_id=project_id,
+        sequence_order=new_order,
+        title=input_data.title,
+        summary=input_data.summary,
+        status="pending"
+    )
+    db.add(new_scene)
+    db.commit()
+    db.refresh(new_scene)
+    return new_scene
 
 @app.post("/api/projects/{project_id}/generate-scenes", response_model=list[Scene])
 async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db)):
@@ -340,6 +409,35 @@ async def generate_storyboard_endpoint(scene_id: int, db: Session = Depends(get_
     db.refresh(scene)
     
     return scene
+
+@app.delete("/api/scenes/{scene_id}")
+async def delete_scene_endpoint(scene_id: int, db: Session = Depends(get_db)):
+    # Fetch Scene
+    scene = db.query(SceneDB).filter(SceneDB.id == scene_id).first()
+    if not scene:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Scene not found")
+        
+    db.delete(scene)
+    db.commit()
+    return {"message": "Scene deleted successfully"}
+
+class ReorderScenesInput(BaseModel):
+    ordered_ids: list[int]
+
+@app.put("/api/projects/{project_id}/scenes/reorder")
+async def reorder_scenes_endpoint(project_id: int, input_data: ReorderScenesInput, db: Session = Depends(get_db)):
+    # Fetch all scenes for project
+    scenes = db.query(SceneDB).filter(SceneDB.project_id == project_id).all()
+    scene_map = {s.id: s for s in scenes}
+    
+    # Update sequence_order based on input list
+    for index, scene_id in enumerate(input_data.ordered_ids):
+        if scene_id in scene_map:
+            scene_map[scene_id].sequence_order = index + 1
+            
+    db.commit()
+    return {"message": "Scenes reordered successfully"}
 
 @app.get("/")
 async def root():

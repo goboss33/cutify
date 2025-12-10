@@ -15,15 +15,219 @@ import { Textarea } from "@/components/ui/textarea";
 import { StoryboardGrid } from "./StoryboardGrid";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Filter, List, PenTool, Loader2, Camera } from "lucide-react";
+import { Filter, List, PenTool, Loader2, Camera, GripVertical, Trash2 } from "lucide-react";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, generatingScriptIds, generatingStoryboardIds, onDelete }: any) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: scene.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : "auto",
+        position: "relative" as "relative", // Fix TS error
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} className={cn("mb-4", isDragging && "opacity-50")}>
+            <AccordionItem
+                value={String(scene.id)}
+                className="border border-border rounded-lg bg-card overflow-hidden data-[state=open]:ring-1 data-[state=open]:ring-primary transition-all"
+            >
+                <div className="flex items-center border-b border-border/50">
+                    {/* Drag Handle */}
+                    <div {...attributes} {...listeners} className="px-3 py-4 cursor-grab hover:text-primary transition-colors text-muted-foreground">
+                        <GripVertical className="h-5 w-5" />
+                    </div>
+
+                    <AccordionTrigger className="px-4 py-4 hover:no-underline hover:bg-muted/50 transition-colors flex-1">
+                        <div className="flex items-center gap-4 w-full text-left">
+                            {/* Status Indicator */}
+                            <div className={cn(
+                                "h-2 w-2 rounded-full shrink-0",
+                                scene.status === 'done' || scene.status === 'storyboarded' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" :
+                                    scene.status === 'in-progress' || scene.status === 'scripted' ? "bg-amber-500" :
+                                        "bg-neutral-600"
+                            )} />
+
+                            {/* Title & Stats */}
+                            <div className="flex-1">
+                                <h3 className="text-lg font-semibold leading-none mb-1">{scene.title}</h3>
+                                <div className="text-xs text-muted-foreground flex gap-3 font-mono">
+                                    <span>{scene.estimated_duration || scene.duration || "N/A"}</span>
+                                    <span className={cn(
+                                        scene.status === 'done' || scene.status === 'storyboarded' ? "text-green-500" :
+                                            scene.status === 'in-progress' || scene.status === 'scripted' ? "text-amber-500" : ""
+                                    )}>
+                                        {scene.status === 'storyboarded' ? `Ready [${scene.shots?.length || 0} shots]` :
+                                            scene.status === 'scripted' ? "Scripted" :
+                                                "Pending"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Right side thumbnail */}
+                            <div className="hidden sm:block h-10 w-16 bg-neutral-800 rounded bg-cover bg-center shrink-0 border border-white/10"
+                                style={{ backgroundImage: scene.shots && scene.shots[0] ? `url(${scene.shots[0].image_url?.startsWith('http') ? scene.shots[0].image_url : `http://127.0.0.1:8000${scene.shots[0].image_url}`})` : 'none' }}
+                            />
+                        </div>
+                    </AccordionTrigger>
+
+                    {/* Delete Button */}
+                    <div className="px-3 border-l border-border/50 flex items-center">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive transition-colors"
+                            onClick={(e) => {
+                                e.stopPropagation(); // Prevent Accordion Toggle
+                                if (confirm("Delete this scene?")) onDelete(scene.id);
+                            }}
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+
+                <AccordionContent className="p-0 bg-background/50">
+                    <div className="flex flex-col gap-6 p-6">
+                        {/* Script Editor */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Scene Summary / Script</label>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 gap-2 text-xs"
+                                    disabled={generatingScriptIds.has(scene.id) || !!scene.script}
+                                    onClick={() => onGenerateScript(scene.id)}
+                                >
+                                    {generatingScriptIds.has(scene.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <PenTool className="h-3 w-3" />}
+                                    {scene.script ? "Script Generated" : "Write Script with AI"}
+                                </Button>
+                            </div>
+                            <textarea
+                                className="w-full min-h-[150px] bg-neutral-900/50 border border-border rounded-md p-4 text-sm font-mono text-neutral-300 resize-y focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
+                                defaultValue={scene.script || scene.summary || ""}
+                                key={scene.script ? 'script' : 'summary'}
+                            />
+                        </div>
+
+                        {/* Storyboard */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Storyboard Interpretation</label>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 gap-2 text-xs"
+                                    disabled={generatingStoryboardIds.has(scene.id) || !scene.script}
+                                    onClick={() => onGenerateStoryboard(scene.id)}
+                                >
+                                    {generatingStoryboardIds.has(scene.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                                    {scene.shots && scene.shots.length > 0 ? "Regenerate Storyboard" : "Generate Storyboard"}
+                                </Button>
+                                {scene.master_image_url && (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 gap-2 text-xs"
+                                        onClick={() => {
+                                            const url = scene.master_image_url?.startsWith("http")
+                                                ? scene.master_image_url
+                                                : `http://127.0.0.1:8000${scene.master_image_url}`;
+                                            window.open(url, '_blank');
+                                        }}
+                                    >
+                                        <Filter className="h-3 w-3" /> View Source Grid
+                                    </Button>
+                                )}
+                            </div>
+                            <StoryboardGrid scene={scene} />
+                        </div>
+                    </div>
+                </AccordionContent>
+            </AccordionItem>
+        </div>
+    );
+}
 
 export function SceneList() {
     const { currentProject, setScenes } = useProject();
-    // If no project selected, show Mock. If project selected, show its scenes (even if empty? ProjectHub handles empty state usually).
     const scenes = currentProject ? (currentProject.scenes || []) : MOCK_SCENES;
 
     const [generatingScriptIds, setGeneratingScriptIds] = useState<Set<number>>(new Set());
     const [generatingStoryboardIds, setGeneratingStoryboardIds] = useState<Set<number>>(new Set());
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (active.id !== over?.id) {
+            const oldIndex = scenes.findIndex((s) => s.id === active.id);
+            const newIndex = scenes.findIndex((s) => s.id === over?.id);
+
+            const newScenes = arrayMove(scenes, oldIndex, newIndex);
+
+            // Optimistic update
+            setScenes(newScenes);
+
+            // Backend Update
+            if (currentProject?.id) {
+                const orderedIds = newScenes.map(s => s.id);
+                try {
+                    await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}/scenes/reorder`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ordered_ids: orderedIds })
+                    });
+                } catch (e) {
+                    console.error("Reorder failed", e);
+                }
+            }
+        }
+    };
+
+    const handleDeleteScene = async (sceneId: number) => {
+        if (!currentProject?.id) return;
+
+        // Optimistic delete
+        const newScenes = scenes.filter(s => s.id !== sceneId);
+        setScenes(newScenes);
+
+        try {
+            await fetch(`http://127.0.0.1:8000/api/scenes/${sceneId}`, { method: "DELETE" });
+        } catch (e) {
+            console.error("Delete failed", e);
+            alert("Failed to delete scene");
+        }
+    };
 
     const handleGenerateScript = async (sceneId: number) => {
         if (!currentProject) return;
@@ -95,109 +299,59 @@ export function SceneList() {
                 </div>
             </div>
 
-            <div className="flex-1">
-                <Accordion type="single" collapsible className="w-full p-4 space-y-4">
-                    {scenes.map((scene) => (
-                        <AccordionItem
-                            key={scene.id}
-                            value={String(scene.id)}
-                            className="border border-border rounded-lg bg-card overflow-hidden data-[state=open]:ring-1 data-[state=open]:ring-primary transition-all"
-                        >
-                            <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 transition-colors">
-                                <div className="flex items-center gap-4 w-full text-left">
-                                    {/* Status Indicator */}
-                                    <div className={cn(
-                                        "h-2 w-2 rounded-full shrink-0",
-                                        scene.status === 'done' || scene.status === 'storyboarded' ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" :
-                                            scene.status === 'in-progress' || scene.status === 'scripted' ? "bg-amber-500" :
-                                                "bg-neutral-600"
-                                    )} />
+            <div className="flex-1 overflow-auto">
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                >
+                    <SortableContext
+                        items={scenes.map(s => s.id)}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        <Accordion type="single" collapsible className="w-full p-4">
+                            {scenes.map((scene) => (
+                                <SortableSceneItem
+                                    key={scene.id}
+                                    scene={scene}
+                                    onGenerateScript={handleGenerateScript}
+                                    onGenerateStoryboard={handleGenerateStoryboard}
+                                    generatingScriptIds={generatingScriptIds}
+                                    generatingStoryboardIds={generatingStoryboardIds}
+                                    onDelete={handleDeleteScene}
+                                />
+                            ))}
+                        </Accordion>
+                    </SortableContext>
+                </DndContext>
 
-                                    {/* Title & Stats */}
-                                    <div className="flex-1">
-                                        <h3 className="text-lg font-semibold leading-none mb-1">{scene.title}</h3>
-                                        <div className="text-xs text-muted-foreground flex gap-3 font-mono">
-                                            <span>{scene.estimated_duration || scene.duration || "N/A"}</span>
-                                            <span className={cn(
-                                                scene.status === 'done' || scene.status === 'storyboarded' ? "text-green-500" :
-                                                    scene.status === 'in-progress' || scene.status === 'scripted' ? "text-amber-500" : ""
-                                            )}>
-                                                {scene.status === 'storyboarded' ? `Ready [${scene.shots?.length || 0} shots]` :
-                                                    scene.status === 'scripted' ? "Scripted" :
-                                                        "Pending"}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Right side thumbnail (visible when collapsed usually, but accordions hide content. We can put a thumb in trigger if we want) */}
-                                    <div className="hidden sm:block h-10 w-16 bg-neutral-800 rounded bg-cover bg-center shrink-0 border border-white/10"
-                                        style={{ backgroundImage: scene.shots && scene.shots[0] ? `url(${scene.shots[0].image_url?.startsWith('http') ? scene.shots[0].image_url : `http://127.0.0.1:8000${scene.shots[0].image_url}`})` : 'none' }}
-                                    />
-                                </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="p-0 bg-background/50">
-                                {/* Internal Layout: Script (Top) -> Storyboard (Bottom) or Split? PRD says Text Area then 3x3 Grid. */}
-                                <div className="flex flex-col gap-6 p-6">
-                                    {/* Script Editor */}
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Scene Summary / Script</label>
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="h-7 gap-2 text-xs"
-                                                disabled={generatingScriptIds.has(scene.id) || !!scene.script}
-                                                onClick={() => handleGenerateScript(scene.id)}
-                                            >
-                                                {generatingScriptIds.has(scene.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <PenTool className="h-3 w-3" />}
-                                                {scene.script ? "Script Generated" : "Write Script with AI"}
-                                            </Button>
-                                        </div>
-                                        <textarea
-                                            className="w-full min-h-[150px] bg-neutral-900/50 border border-border rounded-md p-4 text-sm font-mono text-neutral-300 resize-y focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
-                                            defaultValue={scene.script || scene.summary || ""}
-                                            key={scene.script ? 'script' : 'summary'} // Force re-render if switching from summary to script
-                                        />
-                                    </div>
-
-                                    {/* Storyboard */}
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Storyboard Interpretation</label>
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="h-7 gap-2 text-xs"
-                                                disabled={generatingStoryboardIds.has(scene.id) || !scene.script}
-                                                onClick={() => handleGenerateStoryboard(scene.id)}
-                                            >
-                                                {generatingStoryboardIds.has(scene.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
-                                                {scene.shots && scene.shots.length > 0 ? "Regenerate Storyboard" : "Generate Storyboard"}
-                                            </Button>
-                                            {scene.master_image_url && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="h-7 gap-2 text-xs"
-                                                    onClick={() => {
-                                                        const url = scene.master_image_url?.startsWith("http")
-                                                            ? scene.master_image_url
-                                                            : `http://127.0.0.1:8000${scene.master_image_url}`;
-                                                        window.open(url, '_blank');
-                                                    }}
-                                                >
-                                                    <Filter className="h-3 w-3" /> View Source Grid
-                                                </Button>
-                                            )}
-                                        </div>
-                                        <StoryboardGrid scene={scene} />
-                                    </div>
-                                </div>
-                            </AccordionContent>
-                        </AccordionItem>
-                    ))}
-                </Accordion>
+                <div className="p-4 border-t border-border">
+                    <Button
+                        variant="ghost"
+                        className="w-full border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/50 text-muted-foreground transition-all"
+                        onClick={async () => {
+                            if (!currentProject?.id) return;
+                            const defaultTitle = `Scene ${(scenes.length || 0) + 1}`;
+                            try {
+                                const response = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}/scenes/simple`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ title: defaultTitle, summary: "" })
+                                });
+                                if (response.ok) {
+                                    const newScene = await response.json();
+                                    setScenes([...scenes, newScene]);
+                                }
+                            } catch (e) {
+                                console.error(e);
+                            }
+                        }}
+                    >
+                        + Add New Scene
+                    </Button>
+                </div>
             </div>
         </div>
     );
 }
+
