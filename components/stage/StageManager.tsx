@@ -25,8 +25,13 @@ export function StageManager() {
         <main className="bg-background h-full flex flex-col relative w-full">
             {/* Stage Navigation / Header Controls */}
             <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-background z-20 shrink-0">
-                <div className="font-semibold text-lg">
-                    Project Workspace
+                <div className="flex flex-col overflow-hidden">
+                    <span className="font-bold text-lg leading-tight truncate">
+                        {currentProject?.title || "Untitled Project"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                        {currentProject?.genre || "Concept"} • {currentProject?.status || "Draft"}
+                    </span>
                 </div>
 
                 {/* Right Side Controls (Player Toggle) */}

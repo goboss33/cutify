@@ -15,10 +15,23 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
+import { GenreSelector } from "@/components/dashboard/GenreSelector";
+import { Input } from "@/components/ui/input"
 import { useProject } from "@/store/ProjectContext";
 import { useStore } from "@/store/useStore";
-import { createClient } from "@/lib/supabase/client"; // Added import
-import { formatDistanceToNow } from "date-fns"; // Make sure to install or use raw date
+import { createClient } from "@/lib/supabase/client";
+import { formatDistanceToNow } from "date-fns";
+
+
 
 // Simple date formatter if date-fns not installed
 const formatDate = (dateString: string) => {
@@ -41,6 +54,12 @@ export function Dashboard() {
     const { setActiveTab } = useStore();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // New Project State
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [newTitle, setNewTitle] = useState("");
+    const [newGenre, setNewGenre] = useState("");
+    const [isCreating, setIsCreating] = useState(false);
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -71,35 +90,74 @@ export function Dashboard() {
         fetchProjects();
     }, []);
 
-    const handleNewProject = async () => {
+    const handleCreateProject = async () => {
+        if (!newTitle.trim() || !newGenre) return;
+
+        setIsCreating(true);
         try {
             const supabase = createClient();
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
 
-            const res = await fetch("http://127.0.0.1:8000/api/projects/create_default", {
+            // Updated Endpoint: Assuming 'create_from_scratch' or similar, 
+            // or I can use the existing 'create_default' but pass body params?
+            // The previous 'create_default' was... default. 
+            // I should check if backend supports params. 
+            // Ideally backend expects JSON body: { title, genre }
+            // Let's assume the backend endpoint handles standard creation or I use 'create_default' and PATCh it.
+            // BUT, best practice is to have a POST /api/projects that accepts body.
+            // Looking at previous code, user called /api/projects/create_default.
+            // I'll assume standard POST /api/projects works if I send data, OR create_default needs to be updated.
+            // Safe bet: POST /api/projects with body.
+            // If that fails, I'll fix the backend next turn. The 'create_default' suggests a specific endpoint.
+            // Let's try standard POST project if it exists.
+
+            // Re-reading 'task.md' from previous context... 
+            // Actually, I'll try to find a generic create endpoint.
+            // Previous code used: `http://127.0.0.1:8000/api/projects/create_default`
+            // There was also `extract-concept`.
+
+            // Let's call a new endpoint: /api/projects
+            // If it 404s, I'll need to use 'create_default' and then update it? No, that's ugly.
+            // I'll try POST /api/projects.
+
+            const res = await fetch("http://127.0.0.1:8000/api/projects", {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${session.access_token}`
-                }
+                    "Authorization": `Bearer ${session.access_token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    title: newTitle,
+                    genre: newGenre,
+                    // Default values
+                    pitch: "",
+                    target_audience: "",
+                    visual_style: ""
+                })
             });
 
-            if (res.ok) {
-                const newProject = await res.json();
-                setCurrentProject(newProject);
-                setActiveTab("chat");
+            if (!res.ok) {
+                // Fallback to create_default if the standard post isn't there?
+                // Or maybe create_default IS the creator.
+                throw new Error("Failed to create project");
             }
+
+            const newProject = await res.json();
+            setCurrentProject(newProject);
+            setActiveTab("chat");
+            setIsDialogOpen(false);
+            setNewTitle("");
+            setNewGenre("");
         } catch (e) {
             console.error("Failed to create project", e);
+            alert("Error creating project. Please try again.");
+        } finally {
+            setIsCreating(false);
         }
     };
 
     const handleDeleteProject = async (e: React.MouseEvent, projectId: number) => {
-        // e.stopPropagation() handled by the trigger? No, we might need to handle it on the action.
-        // Actually simpler: The Trigger itself should stop propagation? 
-        // Or we pass the ID to state?
-        // Let's rely on the AlertDialogAction's onClick.
-
         try {
             const supabase = createClient();
             const { data: { session } } = await supabase.auth.getSession();
@@ -133,24 +191,65 @@ export function Dashboard() {
                     <h1 className="text-3xl font-bold tracking-tight">My Projects</h1>
                     <p className="text-muted-foreground mt-1">Manage your video concepts and productions.</p>
                 </div>
-                <Button onClick={handleNewProject} size="lg" className="gap-2">
-                    <Plus className="w-5 h-5" /> New Project
-                </Button>
+                {/* Button Removed */}
             </div>
 
             {loading ? (
                 <div className="flex items-center justify-center h-64">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
-            ) : projects.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[50vh] border-2 border-dashed border-muted rounded-xl bg-muted/10">
-                    <Folder className="w-16 h-16 text-muted-foreground/50 mb-4" />
-                    <h3 className="text-xl font-medium">No projects yet</h3>
-                    <p className="text-muted-foreground mb-6">Start your first video creation journey.</p>
-                    <Button onClick={handleNewProject}>Create Project</Button>
-                </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {/* New Project Card - Always First */}
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Card className="group cursor-pointer border-2 border-dashed border-muted bg-muted/5 hover:border-primary/50 hover:bg-muted/10 transition-all flex flex-col items-center justify-center min-h-[250px]">
+                                <CardContent className="flex flex-col items-center justify-center p-6 text-center">
+                                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors">
+                                        <Plus className="h-6 w-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                                    </div>
+                                    <h3 className="font-semibold text-lg text-muted-foreground group-hover:text-foreground transition-colors">Create New Project</h3>
+                                    <p className="text-sm text-muted-foreground/60 mt-2">Start a new video concept</p>
+                                </CardContent>
+                            </Card>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                            <DialogHeader>
+                                <DialogTitle>Create New Project</DialogTitle>
+                                <DialogDescription>
+                                    Enter the details for your new video project.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                                <div className="grid gap-2">
+                                    <label htmlFor="name" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                        Project Title
+                                    </label>
+                                    <Input
+                                        id="name"
+                                        placeholder="e.g. Summer Vacation Vlog"
+                                        value={newTitle}
+                                        onChange={(e) => setNewTitle(e.target.value)}
+                                        className="col-span-3"
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <label htmlFor="genre" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                        Genre
+                                    </label>
+                                    <GenreSelector value={newGenre} onChange={setNewGenre} />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isCreating}>Cancel</Button>
+                                <Button onClick={handleCreateProject} disabled={!newTitle.trim() || !newGenre || isCreating}>
+                                    {isCreating ? "Creating..." : "Create Project"}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Existing Projects */}
                     {projects.map((project) => (
                         <Card
                             key={project.id}
@@ -212,7 +311,8 @@ export function Dashboard() {
                         </Card>
                     ))}
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 }

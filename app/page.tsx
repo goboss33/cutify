@@ -1,42 +1,17 @@
 "use client";
-import React, { useEffect } from "react";
-import { ProductionSidebar } from "@/components/sidebar/ProductionSidebar";
+import React from "react";
 import { GlobalSidebar } from "@/components/sidebar/GlobalSidebar";
 import { StageManager } from "@/components/stage/StageManager";
 import { TimelineAssembly } from "@/components/timeline/TimelineAssembly";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { useProject } from "@/store/ProjectContext";
 import { useStore } from "@/store/useStore";
-import { Folder, Image as ImageIcon } from "lucide-react";
+import { Image as ImageIcon } from "lucide-react";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 
 export default function Home() {
   const { currentProject } = useProject();
   const { currentView } = useStore();
-  const [sidebarWidth, setSidebarWidth] = React.useState(500); // Default wider
-  const [isResizing, setIsResizing] = React.useState(false);
-
-  const startResizing = React.useCallback(() => setIsResizing(true), []);
-  const stopResizing = React.useCallback(() => setIsResizing(false), []);
-
-  const resize = React.useCallback(
-    (e: MouseEvent) => {
-      if (isResizing) {
-        setSidebarWidth((prev) => Math.max(250, Math.min(prev + e.movementX, 800)));
-      }
-    },
-    [isResizing]
-  );
-
-  useEffect(() => {
-    if (isResizing) {
-      window.addEventListener("mousemove", resize);
-      window.addEventListener("mouseup", stopResizing);
-    }
-    return () => {
-      window.removeEventListener("mousemove", resize);
-      window.removeEventListener("mouseup", stopResizing);
-    };
-  }, [isResizing, resize, stopResizing]);
 
   // Determine what to render in the main area
   const renderMainContent = () => {
@@ -44,20 +19,8 @@ export default function Home() {
     if (currentProject) {
       return (
         <div
-          className="grid h-full w-full grid-rows-[1fr_auto] overflow-hidden select-none"
-          style={{ gridTemplateColumns: `${sidebarWidth}px auto 1fr` }}
+          className="grid h-full w-full grid-rows-[1fr_auto] overflow-hidden select-none relative"
         >
-          {/* ZONE A: PROJECT CONTEXT SIDEBAR */}
-          <div className="row-span-2 border-r border-border h-full overflow-hidden">
-            <ProductionSidebar />
-          </div>
-
-          {/* RESIZER HANDLE */}
-          <div
-            className="row-span-2 w-1 hover:bg-primary/50 cursor-col-resize active:bg-primary transition-colors h-full z-10 -ml-[2px]"
-            onMouseDown={startResizing}
-          />
-
           {/* ZONE B: STAGE & SCENE MANAGER */}
           <div className="border-b border-border h-full overflow-y-auto bg-background/50">
             <StageManager />
@@ -67,6 +30,8 @@ export default function Home() {
           <div className="bg-background">
             <TimelineAssembly />
           </div>
+
+          <ChatWidget />
         </div>
       );
     }
