@@ -239,26 +239,10 @@ export function ProductionSidebar() {
             {/* Header - Simpler now, just Project Title */}
             <div className="p-4 border-b border-border flex items-center justify-between shrink-0 h-16 bg-sidebar/50 backdrop-blur-sm">
                 <div className="flex flex-col w-full overflow-hidden">
-                    {/* Project Title Input */}
-                    <input
-                        className="font-bold truncate text-base bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-primary rounded px-1 -ml-1 w-full text-foreground"
-                        value={currentProject ? currentProject.title : "Loading..."}
-                        onChange={(e) => currentProject && setCurrentProject({ ...currentProject, title: e.target.value })}
-                        onBlur={async (e) => {
-                            if (!currentProject?.id) return;
-                            try {
-                                await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}`, {
-                                    method: "PATCH",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ title: e.target.value })
-                                });
-                            } catch (err) {
-                                console.error(err);
-                            }
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                        placeholder="Project Name"
-                    />
+                    {/* Project Title (Read Only) */}
+                    <h2 className="font-bold truncate text-base text-foreground" title={currentProject?.title}>
+                        {currentProject ? currentProject.title : "Loading..."}
+                    </h2>
                     <span className="text-xs text-muted-foreground flex items-center gap-2">
                         {currentProject?.status || "Draft"} • {currentProject?.genre || "No Genre"}
                     </span>
