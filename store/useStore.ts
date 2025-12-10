@@ -9,6 +9,9 @@ interface AppState {
 
     isPlayerMode: boolean;
     setPlayerMode: (isPlayer: boolean) => void;
+
+    currentView: 'dashboard' | 'assets';
+    setCurrentView: (view: 'dashboard' | 'assets') => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -23,4 +26,7 @@ export const useStore = create<AppState>((set) => ({
 
     isPlayerMode: false,
     setPlayerMode: (isPlayer) => set({ isPlayerMode: isPlayer }),
+
+    currentView: 'dashboard',
+    setCurrentView: (view) => set({ currentView: view }),
 }));

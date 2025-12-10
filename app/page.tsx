@@ -1,49 +1,74 @@
 "use client";
-
+import React, { useEffect } from "react";
 import { ProductionSidebar } from "@/components/sidebar/ProductionSidebar";
+import { GlobalSidebar } from "@/components/sidebar/GlobalSidebar";
 import { StageManager } from "@/components/stage/StageManager";
 import { TimelineAssembly } from "@/components/timeline/TimelineAssembly";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { useProject } from "@/store/ProjectContext";
-import { useEffect } from "react";
+import { useStore } from "@/store/useStore";
+import { Folder, Image as ImageIcon } from "lucide-react";
 
 export default function Home() {
-  const { currentProject, setCurrentProject } = useProject();
+  const { currentProject } = useProject();
+  const { currentView } = useStore();
 
-  // On mount, ensure we start with no project (Dashboard view) 
-  // unless we want to persist last session (optional future feature)
-  // For now, let's force Dashboard on refresh for clarity
-  useEffect(() => {
-    // Optional: setCurrentProject(null); 
-    // Actually, if we want persistence, we keep it. If we want "My Projects" first, we null it.
-    // Let's rely on Context default (null)
-  }, []);
+  // Determine what to render in the main area
+  const renderMainContent = () => {
+    // 1. Project View (Highest Priority if project is selected)
+    if (currentProject) {
+      return (
+        <div className="grid h-full w-full grid-cols-[300px_1fr] grid-rows-[1fr_auto] overflow-hidden">
+          {/* ZONE A: PROJECT CONTEXT SIDEBAR */}
+          <div className="row-span-2 border-r border-border h-full overflow-hidden">
+            <ProductionSidebar />
+          </div>
 
-  if (!currentProject) {
-    return (
-      <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
-        <ProductionSidebar /> {/* Sidebar remains visible for Profile access */}
-        <Dashboard />
-      </div>
-    );
-  }
+          {/* ZONE B: STAGE & SCENE MANAGER */}
+          <div className="border-b border-border h-full overflow-y-auto bg-background/50">
+            <StageManager />
+          </div>
+
+          {/* ZONE C: TIMELINE ASSEMBLY */}
+          <div className="bg-background">
+            <TimelineAssembly />
+          </div>
+        </div>
+      );
+    }
+
+    // 2. Dashboard View
+    if (currentView === 'dashboard') {
+      return <Dashboard />;
+    }
+
+    // 3. Assets View (Placeholder)
+    if (currentView === 'assets') {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-background/50">
+          <div className="p-8 border-2 border-dashed border-muted rounded-xl bg-muted/10 flex flex-col items-center">
+            <ImageIcon className="w-16 h-16 opacity-50 mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">My Assets</h2>
+            <p className="max-w-md text-center">
+              Centralized asset management for all your videos coming soon.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return <Dashboard />; // Default
+  };
 
   return (
-    <div className="grid h-screen w-screen grid-cols-[300px_1fr] grid-rows-[1fr_auto] bg-background text-foreground overflow-hidden">
-      {/* ZONE A: SIDEBAR (Left, fixed width) */}
-      <div className="row-span-2 border-r border-border">
-        <ProductionSidebar />
-      </div>
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+      {/* GLOBAL NAVIGATION (Leftmost) */}
+      <GlobalSidebar />
 
-      {/* ZONE B: STAGE & SCENE MANAGER (Top Right) */}
-      <div className="border-b border-border h-full overflow-y-auto">
-        <StageManager />
-      </div>
-
-      {/* ZONE C: TIMELINE ASSEMBLY (Bottom Right) */}
-      <div className="">
-        <TimelineAssembly />
-      </div>
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 h-full overflow-hidden relative">
+        {renderMainContent()}
+      </main>
     </div>
   );
 }

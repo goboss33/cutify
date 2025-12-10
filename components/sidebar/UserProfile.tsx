@@ -13,8 +13,9 @@ import {
 import { User, LogOut, Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
-export function UserProfile() {
+export function UserProfile({ isCollapsed }: { isCollapsed?: boolean }) {
     const [user, setUser] = useState<any>(null);
     const router = useRouter();
     const supabase = createClient();
@@ -35,25 +36,30 @@ export function UserProfile() {
     if (!user) return null;
 
     return (
-        <div className="p-4 border-t border-border mt-auto">
+        <div className={cn("border-t border-border mt-auto", isCollapsed ? "p-2" : "p-4")}>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-3 w-full hover:bg-muted/50 p-2 rounded-lg transition-colors text-left">
+                    <button className={cn(
+                        "flex items-center gap-3 w-full hover:bg-muted/50 rounded-lg transition-colors text-left",
+                        isCollapsed ? "justify-center p-2" : "p-2"
+                    )}>
                         <Avatar className="h-9 w-9 border border-border">
                             <AvatarImage src={user.user_metadata?.avatar_url} />
                             <AvatarFallback>{user.email?.[0].toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <div className="flex flex-col flex-1 overflow-hidden">
-                            <span className="text-sm font-medium truncate">
-                                {user.user_metadata?.full_name || "User"}
-                            </span>
-                            <span className="text-xs text-muted-foreground truncate">
-                                {user.email}
-                            </span>
-                        </div>
+                        {!isCollapsed && (
+                            <div className="flex flex-col flex-1 overflow-hidden">
+                                <span className="text-sm font-medium truncate">
+                                    {user.user_metadata?.full_name || "User"}
+                                </span>
+                                <span className="text-xs text-muted-foreground truncate">
+                                    {user.email}
+                                </span>
+                            </div>
+                        )}
                     </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start" forceMount>
+                <DropdownMenuContent className="w-56" align={isCollapsed ? "center" : "start"} side={isCollapsed ? "right" : "top"} forceMount>
                     <DropdownMenuLabel>My Account</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem>

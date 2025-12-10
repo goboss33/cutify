@@ -236,52 +236,33 @@ export function ProductionSidebar() {
 
     return (
         <aside className="border-r border-border bg-sidebar flex flex-col h-full text-sidebar-foreground">
-            {/* Header */}
-            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center shrink-0">
-                        <span className="font-bold text-primary-foreground">C</span>
-                    </div>
-                    <div className="flex flex-col overflow-hidden w-full">
-                        {currentProject && currentProject.id !== 0 ? (
-                            <input
-                                className="font-semibold truncate text-sm bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-primary rounded px-1 -ml-1 w-full"
-                                value={currentProject.title}
-                                onChange={(e) => setCurrentProject({ ...currentProject, title: e.target.value })}
-                                onBlur={async (e) => {
-                                    // Save on blur
-                                    if (!currentProject.id) return;
-                                    try {
-                                        const response = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}`, {
-                                            method: "PATCH",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({ title: e.target.value })
-                                        });
-                                        if (!response.ok) {
-                                            console.error("Failed to update title");
-                                            // Revert or show error? For now simple log.
-                                        }
-                                    } catch (err) {
-                                        console.error(err);
-                                    }
-                                }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') e.currentTarget.blur();
-                                }}
-                            />
-                        ) : (
-                            <span className="font-semibold truncate text-sm">
-                                {currentProject ? currentProject.title : "No Project"}
-                            </span>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                            {/* MOCK_PROJECT.duration */}
-                        </span>
-                    </div>
+            {/* Header - Simpler now, just Project Title */}
+            <div className="p-4 border-b border-border flex items-center justify-between shrink-0 h-16 bg-sidebar/50 backdrop-blur-sm">
+                <div className="flex flex-col w-full overflow-hidden">
+                    {/* Project Title Input */}
+                    <input
+                        className="font-bold truncate text-base bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-primary rounded px-1 -ml-1 w-full text-foreground"
+                        value={currentProject ? currentProject.title : "Loading..."}
+                        onChange={(e) => currentProject && setCurrentProject({ ...currentProject, title: e.target.value })}
+                        onBlur={async (e) => {
+                            if (!currentProject?.id) return;
+                            try {
+                                await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ title: e.target.value })
+                                });
+                            } catch (err) {
+                                console.error(err);
+                            }
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                        placeholder="Project Name"
+                    />
+                    <span className="text-xs text-muted-foreground flex items-center gap-2">
+                        {currentProject?.status || "Draft"} • {currentProject?.genre || "No Genre"}
+                    </span>
                 </div>
-                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setCurrentProject(null)} title="Back to Dashboard">
-                    <LogOut className="h-4 w-4 rotate-180" /> {/* Using LogOut icon reversed as 'Exit Project' */}
-                </Button>
             </div>
 
             {/* Tabs */}
@@ -307,7 +288,7 @@ export function ProductionSidebar() {
                         <div className="flex flex-col gap-4">
                             {!currentProject ? (
                                 <div className="text-center text-muted-foreground text-sm p-4">
-                                    Select a project from the Dashboard.
+                                    Loading project context...
                                 </div>
                             ) : (
                                 <>
@@ -399,8 +380,6 @@ export function ProductionSidebar() {
                     </div>
                 </TabsContent>
             </Tabs>
-
-            <UserProfile />
         </aside>
     );
 }
