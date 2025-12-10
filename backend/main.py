@@ -42,6 +42,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    print(f"VALIDATION ERROR: {exc.errors()}")
+    # print(f"BODY: {await request.body()}") # Consuming body might break things if not careful
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
 print("DEBUG: Importing ai_service...")
 from services.ai_service import generate_showrunner_response
 print("DEBUG: ai_service imported.")
@@ -218,6 +227,9 @@ class ProjectCreate(BaseModel):
     pitch: str | None = ""
     visual_style: str | None = ""
     target_audience: str | None = ""
+    language: str = "French"
+    target_duration: str = "60s"
+    aspect_ratio: str = "16:9"
 
 @app.post("/api/projects", response_model=Project)
 async def create_project_endpoint(project_data: ProjectCreate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
@@ -227,6 +239,9 @@ async def create_project_endpoint(project_data: ProjectCreate, db: Session = Dep
         pitch=project_data.pitch,
         visual_style=project_data.visual_style,
         target_audience=project_data.target_audience,
+        language=project_data.language,
+        target_duration=project_data.target_duration,
+        aspect_ratio=project_data.aspect_ratio,
         status="concept",
         user_id=user_id,
         created_at=datetime.utcnow()

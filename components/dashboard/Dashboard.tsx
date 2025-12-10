@@ -1,20 +1,16 @@
-"use client";
+"use client"
 
-import React, { useEffect, useState } from "react";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus, Folder, Calendar, Film, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+    Plus,
+    MoreVertical,
+    Trash2,
+    MessageSquare,
+    Image as ImageIcon,
+    Clock,
+    Globe
+} from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import {
     Dialog,
     DialogContent,
@@ -24,42 +20,86 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
 import { GenreSelector } from "@/components/dashboard/GenreSelector";
 import { Input } from "@/components/ui/input"
 import { useProject } from "@/store/ProjectContext";
-import { useStore } from "@/store/useStore";
-import { createClient } from "@/lib/supabase/client";
-import { formatDistanceToNow } from "date-fns";
+import { Project } from "@/types/project";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { FlagFR, FlagUK, FlagES, FlagDE, IconYoutube, IconTikTok } from "@/components/ui/icons";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-
-
-// Simple date formatter if date-fns not installed
-const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString(undefined, {
-        month: "short", day: "numeric", year: "numeric"
-    });
-};
-
-interface Project {
-    id: number;
-    title: string;
-    genre: string;
-    created_at: string;
-    status: string;
-    visual_style?: string;
-}
+const LANGUAGES = [
+    { code: "French", label: "French", icon: FlagFR },
+    { code: "English", label: "English", icon: FlagUK },
+    { code: "Spanish", label: "Spanish", icon: FlagES },
+    { code: "German", label: "German", icon: FlagDE },
+];
 
 export function Dashboard() {
-    const { setCurrentProject } = useProject();
-    const { setActiveTab } = useStore();
+    const { currentProject, setCurrentProject } = useProject();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
-
-    // New Project State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [projectToDelete, setProjectToDelete] = useState<number | null>(null);
+
+    // Form State
     const [newTitle, setNewTitle] = useState("");
     const [newGenre, setNewGenre] = useState("");
+    const [language, setLanguage] = useState("French");
+    const [durationSeconds, setDurationSeconds] = useState([60]); // Default 60s
+    const [aspectRatio, setAspectRatio] = useState("16:9");
     const [isCreating, setIsCreating] = useState(false);
+
+    const confirmDeleteProject = async () => {
+        if (!projectToDelete) return;
+
+        try {
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+
+            const res = await fetch(`http://127.0.0.1:8000/api/projects/${projectToDelete}`, {
+                method: "DELETE",
+                headers: {
+                    "Authorization": `Bearer ${session.access_token}`
+                }
+            });
+
+            if (res.ok) {
+                setProjects(projects.filter(p => p.id !== projectToDelete));
+                if (currentProject?.id === projectToDelete) {
+                    setCurrentProject(null);
+                }
+            } else {
+                console.error("Failed to delete project");
+                alert("Failed to delete project");
+            }
+        } catch (error) {
+            console.error("Error deleting project:", error);
+            alert("Error deleting project");
+        } finally {
+            setProjectToDelete(null);
+        }
+    };
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -90,6 +130,12 @@ export function Dashboard() {
         fetchProjects();
     }, []);
 
+    const formatDuration = (seconds: number) => {
+        if (seconds < 60) return `${seconds}s`;
+        const minutes = Math.floor(seconds / 60);
+        return `${minutes} min${minutes > 1 ? 's' : ''}`;
+    };
+
     const handleCreateProject = async () => {
         if (!newTitle.trim() || !newGenre) return;
 
@@ -99,27 +145,8 @@ export function Dashboard() {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
 
-            // Updated Endpoint: Assuming 'create_from_scratch' or similar, 
-            // or I can use the existing 'create_default' but pass body params?
-            // The previous 'create_default' was... default. 
-            // I should check if backend supports params. 
-            // Ideally backend expects JSON body: { title, genre }
-            // Let's assume the backend endpoint handles standard creation or I use 'create_default' and PATCh it.
-            // BUT, best practice is to have a POST /api/projects that accepts body.
-            // Looking at previous code, user called /api/projects/create_default.
-            // I'll assume standard POST /api/projects works if I send data, OR create_default needs to be updated.
-            // Safe bet: POST /api/projects with body.
-            // If that fails, I'll fix the backend next turn. The 'create_default' suggests a specific endpoint.
-            // Let's try standard POST project if it exists.
-
-            // Re-reading 'task.md' from previous context... 
-            // Actually, I'll try to find a generic create endpoint.
-            // Previous code used: `http://127.0.0.1:8000/api/projects/create_default`
-            // There was also `extract-concept`.
-
-            // Let's call a new endpoint: /api/projects
-            // If it 404s, I'll need to use 'create_default' and then update it? No, that's ugly.
-            // I'll try POST /api/projects.
+            // Convert slider value to string format backend expects
+            const durationStr = formatDuration(durationSeconds[0]);
 
             const res = await fetch("http://127.0.0.1:8000/api/projects", {
                 method: "POST",
@@ -130,7 +157,9 @@ export function Dashboard() {
                 body: JSON.stringify({
                     title: newTitle,
                     genre: newGenre,
-                    // Default values
+                    language,
+                    target_duration: durationStr,
+                    aspect_ratio: aspectRatio,
                     pitch: "",
                     target_audience: "",
                     visual_style: ""
@@ -138,17 +167,19 @@ export function Dashboard() {
             });
 
             if (!res.ok) {
-                // Fallback to create_default if the standard post isn't there?
-                // Or maybe create_default IS the creator.
                 throw new Error("Failed to create project");
             }
 
             const newProject = await res.json();
             setCurrentProject(newProject);
-            setActiveTab("chat");
             setIsDialogOpen(false);
+
+            // Reset form
             setNewTitle("");
             setNewGenre("");
+            setLanguage("French");
+            setDurationSeconds([60]);
+            setAspectRatio("16:9");
         } catch (e) {
             console.error("Failed to create project", e);
             alert("Error creating project. Please try again.");
@@ -158,6 +189,9 @@ export function Dashboard() {
     };
 
     const handleDeleteProject = async (e: React.MouseEvent, projectId: number) => {
+        e.stopPropagation();
+        if (!confirm("Are you sure you want to delete this project?")) return;
+
         try {
             const supabase = createClient();
             const { data: { session } } = await supabase.auth.getSession();
@@ -172,6 +206,9 @@ export function Dashboard() {
 
             if (res.ok) {
                 setProjects(projects.filter(p => p.id !== projectId));
+                if (currentProject?.id === projectId) {
+                    setCurrentProject(null);
+                }
             } else {
                 console.error("Failed to delete project");
             }
@@ -191,7 +228,6 @@ export function Dashboard() {
                     <h1 className="text-3xl font-bold tracking-tight">My Projects</h1>
                     <p className="text-muted-foreground mt-1">Manage your video concepts and productions.</p>
                 </div>
-                {/* Button Removed */}
             </div>
 
             {loading ? (
@@ -200,7 +236,7 @@ export function Dashboard() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {/* New Project Card - Always First */}
+                    {/* New Project Card */}
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                         <DialogTrigger asChild>
                             <Card className="group cursor-pointer border-2 border-dashed border-muted bg-muted/5 hover:border-primary/50 hover:bg-muted/10 transition-all flex flex-col items-center justify-center min-h-[250px]">
@@ -213,16 +249,16 @@ export function Dashboard() {
                                 </CardContent>
                             </Card>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
+                        <DialogContent className="sm:max-w-[500px]">
                             <DialogHeader>
                                 <DialogTitle>Create New Project</DialogTitle>
                                 <DialogDescription>
-                                    Enter the details for your new video project.
+                                    Configure the foundations of your next video.
                                 </DialogDescription>
                             </DialogHeader>
-                            <div className="grid gap-4 py-4">
+                            <div className="grid gap-6 py-4">
                                 <div className="grid gap-2">
-                                    <label htmlFor="name" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                    <label htmlFor="name" className="text-sm font-medium">
                                         Project Title
                                     </label>
                                     <Input
@@ -230,20 +266,98 @@ export function Dashboard() {
                                         placeholder="e.g. Summer Vacation Vlog"
                                         value={newTitle}
                                         onChange={(e) => setNewTitle(e.target.value)}
-                                        className="col-span-3"
+                                        className="h-10"
                                     />
                                 </div>
                                 <div className="grid gap-2">
-                                    <label htmlFor="genre" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                    <label className="text-sm font-medium">
                                         Genre
                                     </label>
                                     <GenreSelector value={newGenre} onChange={setNewGenre} />
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid gap-2">
+                                        <label className="text-sm font-medium">Language</label>
+                                        <Select value={language} onValueChange={setLanguage}>
+                                            <SelectTrigger className="h-10">
+                                                <SelectValue placeholder="Select Language" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {LANGUAGES.map((lang) => (
+                                                    <SelectItem key={lang.code} value={lang.code}>
+                                                        <div className="flex items-center gap-2">
+                                                            <lang.icon className="w-5 h-4 rounded-sm object-cover shadow-sm" />
+                                                            <span>{lang.label}</span>
+                                                        </div>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <label className="text-sm font-medium flex justify-between">
+                                            <span>Duration</span>
+                                            <span className="text-muted-foreground font-normal">{formatDuration(durationSeconds[0])}</span>
+                                        </label>
+                                        <div className="pt-2 px-1">
+                                            <Slider
+                                                value={durationSeconds}
+                                                onValueChange={setDurationSeconds}
+                                                max={10800} // 3 hours (180 mins)
+                                                min={10}    // 10 seconds
+                                                step={10}
+                                                className="cursor-pointer"
+                                            />
+                                            <div className="flex justify-between text-[10px] text-muted-foreground mt-1 px-1">
+                                                <span>10s</span>
+                                                <span>180m</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <label className="text-sm font-medium">Format</label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div
+                                            className={`relative flex flex-col items-center gap-3 cursor-pointer p-4 rounded-xl border-2 transition-all duration-200 ${aspectRatio === "16:9" ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-muted hover:border-primary/50 hover:bg-muted/30"}`}
+                                            onClick={() => setAspectRatio("16:9")}
+                                        >
+                                            <IconYoutube className={`w-8 h-8 ${aspectRatio === "16:9" ? "text-red-600" : "text-muted-foreground"}`} />
+                                            <div className="text-center">
+                                                <span className={`block text-sm font-semibold ${aspectRatio === "16:9" ? "text-primary" : "text-foreground"}`}>YouTube</span>
+                                                <span className="text-xs text-muted-foreground">Landscape 16:9</span>
+                                            </div>
+                                            {aspectRatio === "16:9" && (
+                                                <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary" />
+                                            )}
+                                        </div>
+                                        <div
+                                            className={`relative flex flex-col items-center gap-3 cursor-pointer p-4 rounded-xl border-2 transition-all duration-200 ${aspectRatio === "9:16" ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-muted hover:border-primary/50 hover:bg-muted/30"}`}
+                                            onClick={() => setAspectRatio("9:16")}
+                                        >
+                                            <IconTikTok className={`w-8 h-8 ${aspectRatio === "9:16" ? "text-black dark:text-white" : "text-muted-foreground"}`} />
+                                            <div className="text-center">
+                                                <span className={`block text-sm font-semibold ${aspectRatio === "9:16" ? "text-primary" : "text-foreground"}`}>TikTok</span>
+                                                <span className="text-xs text-muted-foreground">Portrait 9:16</span>
+                                            </div>
+                                            {aspectRatio === "9:16" && (
+                                                <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary" />
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <DialogFooter>
-                                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isCreating}>Cancel</Button>
-                                <Button onClick={handleCreateProject} disabled={!newTitle.trim() || !newGenre || isCreating}>
-                                    {isCreating ? "Creating..." : "Create Project"}
+                                <Button variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={isCreating}>Cancel</Button>
+                                <Button onClick={handleCreateProject} disabled={!newTitle.trim() || !newGenre || isCreating} className="min-w-[120px]">
+                                    {isCreating ? (
+                                        <>
+                                            <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                            Creating...
+                                        </>
+                                    ) : "Create Project"}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -253,66 +367,70 @@ export function Dashboard() {
                     {projects.map((project) => (
                         <Card
                             key={project.id}
-                            className="group cursor-pointer hover:border-primary/50 transition-all hover:bg-muted/50"
+                            className={`group cursor-pointer transition-all hover:shadow-md border-muted ${currentProject?.id === project.id ? 'border-primary ring-1 ring-primary' : 'hover:border-primary/50'}`}
                             onClick={() => handleSelectProject(project)}
                         >
-                            <CardHeader>
-                                <div className="flex justify-between items-start gap-2 w-full min-w-0">
-                                    <div className="min-w-0 flex-1">
-                                        <CardTitle className="truncate pr-1">{project.title}</CardTitle>
-                                        <CardDescription className="truncate mt-1">{project.genre || "Unknown Genre"}</CardDescription>
+                            <CardHeader className="p-0">
+                                <div className="aspect-video w-full bg-muted relative overflow-hidden rounded-t-lg">
+                                    {/* Placeholder Gradient based on ID for visuals */}
+                                    <div className={`absolute inset-0 opacity-20 bg-linear-to-br from-primary to-purple-500`} style={{ filter: `hue-rotate(${project.id * 137}deg)` }} />
+
+                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Button
+                                            variant="destructive"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setProjectToDelete(project.id);
+                                            }}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
                                     </div>
-                                    <div className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full uppercase font-medium shrink-0 ml-auto">
-                                        {project.status}
+
+                                    <div className="absolute bottom-2 left-2 flex gap-1">
+                                        {project.aspect_ratio && (
+                                            <Badge variant="secondary" className="text-[10px] h-5 opacity-90 backdrop-blur-xs">
+                                                {project.aspect_ratio === "16:9" ? <IconYoutube className="w-3 h-3 mr-1" /> : <IconTikTok className="w-3 h-3 mr-1" />}
+                                                {project.aspect_ratio}
+                                            </Badge>
+                                        )}
+                                        <Badge variant="secondary" className="text-[10px] h-5 opacity-90 backdrop-blur-xs">
+                                            {project.language?.slice(0, 2).toUpperCase() || "FR"}
+                                        </Badge>
                                     </div>
                                 </div>
                             </CardHeader>
-                            <CardContent>
-                                <div className="aspect-video bg-muted rounded-md flex items-center justify-center text-muted-foreground/50 group-hover:scale-[1.02] transition-transform">
-                                    <Film className="w-8 h-8 opacity-50" />
-                                </div>
+                            <CardContent className="p-4">
+                                <CardTitle className="text-lg leading-tight mb-2 truncate" title={project.title}>{project.title}</CardTitle>
+                                <CardDescription className="flex items-center gap-2 text-xs">
+                                    <span className="font-medium text-foreground/80">{project.genre}</span>
+                                    <span>•</span>
+                                    <span>{project.target_duration || "60s"}</span>
+                                </CardDescription>
                             </CardContent>
-                            <CardFooter className="text-xs text-muted-foreground border-t bg-muted/20 p-4 flex gap-4">
-                                <div className="flex items-center gap-1">
-                                    <Calendar className="w-3 h-3" />
-                                    {formatDate(project.created_at)}
-                                </div>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 ml-auto -mr-2 text-muted-foreground hover:text-destructive"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                This action cannot be undone. This will permanently delete the project
-                                                "{project.title}" and remove all associated scenes and data.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction
-                                                className="bg-destructive hover:bg-destructive/90"
-                                                onClick={(e) => handleDeleteProject(e, project.id)}
-                                            >
-                                                Delete
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </CardFooter>
                         </Card>
                     ))}
                 </div>
-            )
-            }
-        </div >
+            )}
+
+            <AlertDialog open={!!projectToDelete} onOpenChange={(open) => !open && setProjectToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the project and all associated data.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDeleteProject} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
     );
 }

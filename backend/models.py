@@ -14,6 +14,9 @@ class ProjectDB(Base):
     pitch = Column(Text)
     visual_style = Column(Text)
     target_audience = Column(String)
+    language = Column(String, default="French")
+    target_duration = Column(String, default="60s")
+    aspect_ratio = Column(String, default="16:9")
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="concept")
     user_id = Column(String, index=True, nullable=True) # ID from Supabase Auth
@@ -82,6 +85,9 @@ class ProjectBase(BaseModel):
     pitch: str | None = None
     visual_style: str | None = None
     target_audience: str | None = None
+    language: str = "French"
+    target_duration: str = "60s"
+    aspect_ratio: str = "16:9"
     status: str = "concept"
 
 class SceneBase(BaseModel):
