@@ -12,17 +12,51 @@ import { Folder, Image as ImageIcon } from "lucide-react";
 export default function Home() {
   const { currentProject } = useProject();
   const { currentView } = useStore();
+  const [sidebarWidth, setSidebarWidth] = React.useState(500); // Default wider
+  const [isResizing, setIsResizing] = React.useState(false);
+
+  const startResizing = React.useCallback(() => setIsResizing(true), []);
+  const stopResizing = React.useCallback(() => setIsResizing(false), []);
+
+  const resize = React.useCallback(
+    (e: MouseEvent) => {
+      if (isResizing) {
+        setSidebarWidth((prev) => Math.max(250, Math.min(prev + e.movementX, 800)));
+      }
+    },
+    [isResizing]
+  );
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", resize);
+      window.addEventListener("mouseup", stopResizing);
+    }
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
 
   // Determine what to render in the main area
   const renderMainContent = () => {
     // 1. Project View (Highest Priority if project is selected)
     if (currentProject) {
       return (
-        <div className="grid h-full w-full grid-cols-[300px_1fr] grid-rows-[1fr_auto] overflow-hidden">
+        <div
+          className="grid h-full w-full grid-rows-[1fr_auto] overflow-hidden select-none"
+          style={{ gridTemplateColumns: `${sidebarWidth}px auto 1fr` }}
+        >
           {/* ZONE A: PROJECT CONTEXT SIDEBAR */}
           <div className="row-span-2 border-r border-border h-full overflow-hidden">
             <ProductionSidebar />
           </div>
+
+          {/* RESIZER HANDLE */}
+          <div
+            className="row-span-2 w-1 hover:bg-primary/50 cursor-col-resize active:bg-primary transition-colors h-full z-10 -ml-[2px]"
+            onMouseDown={startResizing}
+          />
 
           {/* ZONE B: STAGE & SCENE MANAGER */}
           <div className="border-b border-border h-full overflow-y-auto bg-background/50">
