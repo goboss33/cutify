@@ -60,16 +60,27 @@ export function Dashboard() {
         fetchProjects();
     }, []);
 
-    const handleNewProject = () => {
-        // Create a dummy "Concept" project in state
-        setCurrentProject({
-            id: 0, // 0 indicates new/unsaved
-            title: "New Project",
-            genre: "",
-            status: "concept",
-            created_at: new Date().toISOString()
-        });
-        setActiveTab("chat"); // Directly go to chat
+    const handleNewProject = async () => {
+        try {
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+
+            const res = await fetch("http://127.0.0.1:8000/api/projects/create_default", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${session.access_token}`
+                }
+            });
+
+            if (res.ok) {
+                const newProject = await res.json();
+                setCurrentProject(newProject);
+                setActiveTab("chat");
+            }
+        } catch (e) {
+            console.error("Failed to create project", e);
+        }
     };
 
     const handleSelectProject = (project: Project) => {

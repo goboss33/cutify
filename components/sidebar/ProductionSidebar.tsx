@@ -345,16 +345,6 @@ export function ProductionSidebar() {
 
                     {/* Input Area */}
                     <div className="p-4 border-t border-border mt-auto shrink-0 bg-sidebar/50 backdrop-blur-sm space-y-2">
-                        {messages.length > 2 && currentProject && currentProject.id === 0 && ( // Only for unsaved concepts
-                            <Button
-                                variant="outline"
-                                className="w-full text-xs h-7 border-dashed border-primary/50 text-primary hover:bg-primary/10"
-                                onClick={handleValidateConcept}
-                                disabled={isLoading}
-                            >
-                                ✨ Validate Concept
-                            </Button>
-                        )}
                         <form
                             className="flex gap-2"
                             onSubmit={handleSendMessage}

@@ -210,6 +210,24 @@ async def extract_concept_endpoint(payload: ExtractConceptInput, db: Session = D
     
     return new_project
 
+@app.post("/api/projects/create_default", response_model=Project)
+async def create_default_project(db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
+    # Create a blank project immediately
+    new_project = ProjectDB(
+        title="Untitled Project",
+        genre="",
+        pitch="",
+        visual_style="",
+        target_audience="",
+        status="concept",
+        user_id=user_id,
+        created_at=datetime.utcnow()
+    )
+    db.add(new_project)
+    db.commit()
+    db.refresh(new_project)
+    return new_project
+
 @app.get("/api/projects", response_model=list[Project])
 async def get_projects_endpoint(db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
     print(f"DEBUG: Fetching projects for user {user_id}")
