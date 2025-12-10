@@ -3,7 +3,18 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Folder, Calendar, Film } from "lucide-react";
+import { Plus, Folder, Calendar, Film, Trash2 } from "lucide-react";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { useProject } from "@/store/ProjectContext";
 import { useStore } from "@/store/useStore";
 import { createClient } from "@/lib/supabase/client"; // Added import
@@ -83,6 +94,34 @@ export function Dashboard() {
         }
     };
 
+    const handleDeleteProject = async (e: React.MouseEvent, projectId: number) => {
+        // e.stopPropagation() handled by the trigger? No, we might need to handle it on the action.
+        // Actually simpler: The Trigger itself should stop propagation? 
+        // Or we pass the ID to state?
+        // Let's rely on the AlertDialogAction's onClick.
+
+        try {
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+
+            const res = await fetch(`http://127.0.0.1:8000/api/projects/${projectId}`, {
+                method: "DELETE",
+                headers: {
+                    "Authorization": `Bearer ${session.access_token}`
+                }
+            });
+
+            if (res.ok) {
+                setProjects(projects.filter(p => p.id !== projectId));
+            } else {
+                console.error("Failed to delete project");
+            }
+        } catch (error) {
+            console.error("Error deleting project:", error);
+        }
+    };
+
     const handleSelectProject = (project: Project) => {
         setCurrentProject(project);
     };
@@ -119,12 +158,12 @@ export function Dashboard() {
                             onClick={() => handleSelectProject(project)}
                         >
                             <CardHeader>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle className="truncate pr-4">{project.title}</CardTitle>
+                                <div className="flex justify-between items-start gap-2 w-full min-w-0">
+                                    <div className="min-w-0 flex-1">
+                                        <CardTitle className="truncate pr-1">{project.title}</CardTitle>
                                         <CardDescription className="truncate mt-1">{project.genre || "Unknown Genre"}</CardDescription>
                                     </div>
-                                    <div className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full uppercase font-medium">
+                                    <div className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full uppercase font-medium shrink-0 ml-auto">
                                         {project.status}
                                     </div>
                                 </div>
@@ -139,6 +178,36 @@ export function Dashboard() {
                                     <Calendar className="w-3 h-3" />
                                     {formatDate(project.created_at)}
                                 </div>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 ml-auto -mr-2 text-muted-foreground hover:text-destructive"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This action cannot be undone. This will permanently delete the project
+                                                "{project.title}" and remove all associated scenes and data.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                className="bg-destructive hover:bg-destructive/90"
+                                                onClick={(e) => handleDeleteProject(e, project.id)}
+                                            >
+                                                Delete
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             </CardFooter>
                         </Card>
                     ))}

@@ -244,6 +244,21 @@ async def get_project_endpoint(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Project not found")
     return project
 
+@app.delete("/api/projects/{project_id}")
+async def delete_project_endpoint(project_id: int, db: Session = Depends(get_db)):
+    # 1. Fetch Project
+    project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
+    if not project:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    # 2. Delete (Cascade should handle relations if configured, otherwise manual)
+    # For now assuming we just delete the project row
+    db.delete(project)
+    db.commit()
+    return {"message": "Project deleted successfully"}
+
+
 class ProjectUpdate(BaseModel):
     title: str | None = None
     genre: str | None = None
