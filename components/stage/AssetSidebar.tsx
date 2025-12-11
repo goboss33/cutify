@@ -241,6 +241,7 @@ export function AssetSidebar() {
                     onCreated={handleAssetCreated}
                     onUpdated={handleAssetUpdated}
                     editAsset={editingAsset}
+                    visualStyle={currentProject?.visual_style || ""}
                 />
             </React.Suspense>
 

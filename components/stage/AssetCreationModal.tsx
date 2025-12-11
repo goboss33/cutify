@@ -36,6 +36,7 @@ interface AssetCreationModalProps {
     onCreated: (asset: any) => void;
     onUpdated?: (asset: any) => void;
     editAsset?: EditableAsset | null; // If provided, we're in edit mode
+    visualStyle?: string;
 }
 
 export function AssetCreationModal({
@@ -46,6 +47,7 @@ export function AssetCreationModal({
     onCreated,
     onUpdated,
     editAsset,
+    visualStyle,
 }: AssetCreationModalProps) {
     // Form state
     const [name, setName] = useState("");
@@ -96,8 +98,8 @@ export function AssetCreationModal({
 
         try {
             const prompt = isCharacter
-                ? `Portrait of a character named "${name}". ${description} Traits: ${traits}. Style: cinematic, high quality portrait, film still.`
-                : `Scene/location: "${name}". ${description} Ambiance: ${ambiance}. Style: cinematic, wide shot, film still, professional photography.`;
+                ? `${description} Traits: ${traits}`
+                : `${description} Ambiance: ${ambiance}`;
 
             const response = await fetch(`${API_BASE}/api/generate-asset-image`, {
                 method: "POST",
@@ -106,6 +108,7 @@ export function AssetCreationModal({
                     prompt,
                     type,
                     name,
+                    style: visualStyle,
                 }),
             });
 
@@ -223,8 +226,8 @@ export function AssetCreationModal({
                                 generatedImageUrl
                                     ? {
                                         backgroundImage: `url(${generatedImageUrl.startsWith("http")
-                                                ? generatedImageUrl
-                                                : `${API_BASE}${generatedImageUrl}`
+                                            ? generatedImageUrl
+                                            : `${API_BASE}${generatedImageUrl}`
                                             })`,
                                         backgroundSize: "cover",
                                         backgroundPosition: "center",

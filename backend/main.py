@@ -577,11 +577,12 @@ class GenerateAssetImageInput(BaseModel):
     prompt: str
     type: str  # "character" or "location"
     name: str
+    style: str | None = None
 
 @app.post("/api/generate-asset-image")
 async def generate_asset_image_endpoint(data: GenerateAssetImageInput):
     """Generate an image for a character or location using Gemini."""
-    image_url = await generate_asset_image(data.prompt, data.type, data.name)
+    image_url = await generate_asset_image(data.prompt, data.type, data.name, data.style)
     
     if not image_url:
         raise HTTPException(status_code=500, detail="Image generation failed")

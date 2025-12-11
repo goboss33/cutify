@@ -7,36 +7,45 @@ from pathlib import Path
 GENAI_API_KEY = os.getenv("GENAI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=GENAI_API_KEY)
 
-async def generate_asset_image(prompt: str, asset_type: str, asset_name: str) -> str | None:
+async def generate_asset_image(prompt: str, asset_type: str, asset_name: str, style: str = "") -> str | None:
     """
     Generates an image for a character or location asset using Gemini.
     Returns the URL of the saved image.
     """
     
+    style_instruction = f"Visual Style: {style}" if style else "Visual Style: Cinematic, Photorealistic"
+
     # Build a cinematic prompt
     if asset_type == "character":
         full_prompt = f"""
-Generate a cinematic portrait image:
+Generate a specific character asset image based on the following requirements:
 
 Subject: {asset_name}
-Details: {prompt}
+Description: {prompt}
+{style_instruction}
+
+COMPOSITION RULES:
+- Shot Type: Wide Shot (Full body shot). Ensure the character is fully visible from head to toe.
+- Environment: PURE WHITE STUDIO BACKGROUND. Infinite white void.
+- Lighting: Soft studio 3-point lighting, flat shading, no cast shadows.
+- Props: NONE. Subject stands on the invisible white floor.
 
 Requirements:
-- High quality cinematic portrait
-- Professional film still aesthetic
-- Realistic lighting
-- Suitable for a movie character reference
+- High quality character design
+- Professional concept art or film still aesthetic (matching the Visual Style)
 - 3:4 portrait aspect ratio
-- Photorealistic style
+- Focus solely on the character design
+- Sharp details, neutral pose appropriate for a character sheet.
 
-OUTPUT: Generate ONE high-quality portrait image.
+OUTPUT: Generate ONE high-quality full-body character image.
 """
     else:
         full_prompt = f"""
 Generate a cinematic location/scene image:
 
 Location: {asset_name}
-Details: {prompt}
+Description: {prompt}
+{style_instruction}
 
 Requirements:
 - Cinematic wide shot or establishing shot
@@ -44,7 +53,7 @@ Requirements:
 - Atmospheric lighting
 - Suitable for a movie location reference
 - 16:9 landscape aspect ratio
-- Photorealistic style
+- Match the requested Visual Style exactly.
 
 OUTPUT: Generate ONE high-quality environment image.
 """
