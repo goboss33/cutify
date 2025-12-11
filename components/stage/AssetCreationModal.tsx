@@ -219,8 +219,8 @@ export function AssetCreationModal({
                             className={cn(
                                 "relative flex items-center justify-center overflow-hidden transition-all bg-muted/30 border-2 border-dashed border-muted-foreground/20",
                                 isCharacter
-                                    ? "h-32 w-32 rounded-full"
-                                    : "h-32 w-full rounded-lg"
+                                    ? "h-32 w-32 rounded-full aspect-square"
+                                    : "w-full aspect-video rounded-lg"
                             )}
                             style={
                                 generatedImageUrl
