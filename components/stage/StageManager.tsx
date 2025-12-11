@@ -57,27 +57,16 @@ export function StageManager() {
 
             {/* Content Area - Scrollable */}
             <div className="flex-1 relative overflow-y-auto">
-                <div className="flex flex-col min-h-full">
-
-                    {/* Concept Header Section */}
-                    {/* We conditionally hide concept/scenes if player mode is active? 
-                        User asked to integrate concept into scene. 
-                        Usually Player Mode takes over the whole screen or center stage.
-                        Let's keep Concept visible in 'Board' mode, maybe hide in 'Player' mode to give space?
-                        For now, let's stack them in Board mode.
-                    */}
-
-                    {!isPlayerMode && (
-                        <div className="border-b border-border/50 bg-muted/10">
-                            <ConceptView />
-                        </div>
-                    )}
-
-                    {/* Scene List or Player */}
-                    <div className="flex-1">
-                        {isPlayerMode ? <PlayerView /> : <SceneList />}
+                {/* Main Content */}
+                {isPlayerMode ? (
+                    <div className="flex-1 h-full">
+                        <PlayerView />
                     </div>
-                </div>
+                ) : (
+                    <div className="flex-1 h-full">
+                        <ConceptView />
+                    </div>
+                )}
             </div>
         </main>
     );
