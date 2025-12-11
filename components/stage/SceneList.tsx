@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useStore } from "@/store/useStore";
 import {
     Accordion,
     AccordionContent,
@@ -149,27 +150,7 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
 
                 <AccordionContent className="p-0 bg-background/50">
                     <div className="flex flex-col gap-6 p-6">
-                        {/* Script Editor */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Scene Summary / Script</label>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 gap-2 text-xs"
-                                    disabled={generatingScript || !!scene.script}
-                                    onClick={() => onGenerateScript(scene.id)}
-                                >
-                                    {generatingScript ? <Loader2 className="h-3 w-3 animate-spin" /> : <PenTool className="h-3 w-3" />}
-                                    {scene.script ? "Script Generated" : "Write Script with AI"}
-                                </Button>
-                            </div>
-                            <textarea
-                                className="w-full min-h-[150px] bg-neutral-900/50 border border-border rounded-md p-4 text-sm font-mono text-neutral-300 resize-y focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed"
-                                defaultValue={scene.script || scene.summary || ""}
-                                key={scene.script ? 'script' : 'summary'}
-                            />
-                        </div>
+                        {/* Script Editor removed - moved to right sidebar */}
 
                         {/* Storyboard */}
                         <div className="space-y-2">
@@ -212,6 +193,7 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
 
 export function SceneList({ viewMode }: { viewMode: "list" | "grid" }) {
     const { currentProject, setScenes } = useProject();
+    const { activeSceneId, toggleScene } = useStore();
     const scenes = currentProject ? (currentProject.scenes || []) : MOCK_SCENES;
 
     const [generatingScriptIds, setGeneratingScriptIds] = useState<Set<number>>(new Set());
@@ -361,7 +343,21 @@ export function SceneList({ viewMode }: { viewMode: "list" | "grid" }) {
                             items={scenes.map(s => s.id)}
                             strategy={verticalListSortingStrategy}
                         >
-                            <Accordion type="single" collapsible className="space-y-4 max-w-4xl mx-auto pb-20">
+                            <Accordion
+                                type="single"
+                                collapsible
+                                className="space-y-4 max-w-4xl mx-auto pb-20"
+                                value={activeSceneId ? String(activeSceneId) : ""}
+                                onValueChange={(val) => {
+                                    if (val) {
+                                        // Opening a new item
+                                        if (String(activeSceneId) !== val) toggleScene(val);
+                                    } else {
+                                        // Closing current item
+                                        if (activeSceneId) toggleScene(activeSceneId);
+                                    }
+                                }}
+                            >
                                 {scenes.map((scene) => (
                                     <SortableSceneItem
                                         key={scene.id}

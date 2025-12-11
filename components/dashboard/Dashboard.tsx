@@ -66,28 +66,30 @@ export function Dashboard() {
 
     useEffect(() => {
         const fetchProjects = async () => {
-            const supabase = createClient();
-            const { data: { session } } = await supabase.auth.getSession();
+            try {
+                const supabase = createClient();
+                const { data: { session } } = await supabase.auth.getSession();
 
-            if (!session?.access_token) return;
-
-            fetch("http://127.0.0.1:8000/api/projects", {
-                headers: {
-                    "Authorization": `Bearer ${session.access_token}`
+                if (!session?.access_token) {
+                    console.log("No session found in Dashboard");
+                    setLoading(false);
+                    return;
                 }
-            })
-                .then(res => {
-                    if (!res.ok) throw new Error("Failed to fetch");
-                    return res.json();
-                })
-                .then(data => {
-                    setProjects(data);
-                    setLoading(false);
-                })
-                .catch(err => {
-                    console.error("Failed to fetch projects", err);
-                    setLoading(false);
+
+                const res = await fetch("http://127.0.0.1:8000/api/projects", {
+                    headers: {
+                        "Authorization": `Bearer ${session.access_token}`
+                    }
                 });
+
+                if (!res.ok) throw new Error("Failed to fetch");
+                const data = await res.json();
+                setProjects(data);
+            } catch (err) {
+                console.error("Failed to fetch projects", err);
+            } finally {
+                setLoading(false);
+            }
         };
 
         fetchProjects();
