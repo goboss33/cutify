@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
     Folder,
     Image as ImageIcon,
@@ -21,6 +21,10 @@ export function GlobalSidebar() {
     const { currentView, setCurrentView } = useStore();
     const { setCurrentProject } = useProject();
     const router = useRouter();
+    const pathname = usePathname();
+
+    // Determine if debug view is active based on route
+    const isDebugActive = pathname === '/debug';
 
     // Navigation Items
     const navItems = [
@@ -90,7 +94,7 @@ export function GlobalSidebar() {
                 {navItems.map((item) => (
                     <Button
                         key={item.label}
-                        variant={currentView === item.view ? "secondary" : "ghost"}
+                        variant={(isDebugActive ? item.view === 'debug' : currentView === item.view) ? "secondary" : "ghost"}
                         className={cn(
                             "w-full justify-start h-10 mb-1",
                             isCollapsed ? "px-0 justify-center" : "px-3"
@@ -98,7 +102,7 @@ export function GlobalSidebar() {
                         onClick={item.onClick}
                         title={isCollapsed ? item.label : undefined}
                     >
-                        <item.icon className={cn("h-5 w-5 shrink-0", !isCollapsed && "mr-3", currentView === item.view && "text-primary")} />
+                        <item.icon className={cn("h-5 w-5 shrink-0", !isCollapsed && "mr-3", (isDebugActive ? item.view === 'debug' : currentView === item.view) && "text-primary")} />
 
                         {!isCollapsed && (
                             <span className="truncate">{item.label}</span>
