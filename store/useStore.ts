@@ -7,8 +7,8 @@ interface AppState {
     activeSceneId: string | null;
     toggleScene: (sceneId: string) => void; // Expands/Collapses
 
-    isPlayerMode: boolean;
-    setPlayerMode: (isPlayer: boolean) => void;
+    stageMode: 'list' | 'grid' | 'player';
+    setStageMode: (mode: 'list' | 'grid' | 'player') => void;
 
     currentView: 'dashboard' | 'assets';
     setCurrentView: (view: 'dashboard' | 'assets') => void;
@@ -24,8 +24,8 @@ export const useStore = create<AppState>((set) => ({
             activeSceneId: state.activeSceneId === sceneId ? null : sceneId,
         })),
 
-    isPlayerMode: false,
-    setPlayerMode: (isPlayer) => set({ isPlayerMode: isPlayer }),
+    stageMode: 'list',
+    setStageMode: (mode) => set({ stageMode: mode }),
 
     currentView: 'dashboard',
     setCurrentView: (view) => set({ currentView: view }),

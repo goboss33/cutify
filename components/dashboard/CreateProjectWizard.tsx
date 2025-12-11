@@ -100,6 +100,43 @@ export function CreateProjectWizard({ onCancel, onProjectCreated }: CreateProjec
         }
     };
 
+    const handleQuickStart = async () => {
+        setIsCreating(true);
+        try {
+            const supabase = createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+
+            const res = await fetch("http://127.0.0.1:8000/api/projects", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${session.access_token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    title: "Untitled Project",
+                    genre: "General",
+                    language: "French",
+                    target_duration: "60s",
+                    aspect_ratio: "16:9",
+                    pitch: "Quick start project",
+                    target_audience: "General Audience",
+                    visual_style: "Cinematic"
+                })
+            });
+
+            if (!res.ok) throw new Error("Failed to create project");
+
+            const newProject = await res.json();
+            onProjectCreated(newProject);
+        } catch (e) {
+            console.error(e);
+            alert("Error creating project");
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
     const nextStep = () => {
         if (step < totalSteps) setStep(step + 1);
     };
@@ -126,7 +163,15 @@ export function CreateProjectWizard({ onCancel, onProjectCreated }: CreateProjec
                         </div>
                     ))}
                 </div>
-                <div className="w-[100px]" /> {/* Spacer for balance */}
+                {/* Quick Start Button */}
+                <Button
+                    variant="ghost"
+                    className="gap-2 text-muted-foreground hover:text-primary transition-colors"
+                    onClick={handleQuickStart}
+                    disabled={isCreating}
+                >
+                    <Sparkles className="w-4 h-4" /> Skip & Quick Start
+                </Button>
             </div>
 
             <div className="flex-1 flex gap-8 items-start">

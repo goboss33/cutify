@@ -5,7 +5,7 @@ import { useStore } from "@/store/useStore";
 import { SceneList } from "./SceneList";
 import { PlayerView } from "./PlayerView";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, PlayCircle } from "lucide-react";
+import { LayoutGrid, PlayCircle, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { ProjectHub } from "./ProjectHub";
@@ -27,7 +27,7 @@ const LANGUAGES: Record<string, any> = {
 };
 
 export function StageManager() {
-    const { isPlayerMode, setPlayerMode } = useStore();
+    const { stageMode, setStageMode } = useStore();
     const { currentProject, setCurrentProject } = useProject();
 
     const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -142,21 +142,30 @@ export function StageManager() {
                     </div>
                 </div>
 
-                {/* Right Side Controls (Player Toggle) */}
+                {/* Right Side Controls (View Toggle) */}
                 <div className="flex items-center p-1 bg-muted/50 rounded-lg border border-border">
                     <Button
-                        variant={!isPlayerMode ? "secondary" : "ghost"}
+                        variant={stageMode === "list" ? "secondary" : "ghost"}
                         size="sm"
-                        onClick={() => setPlayerMode(false)}
-                        className={cn("gap-2 h-8", !isPlayerMode && "bg-background shadow-sm text-foreground")}
+                        onClick={() => setStageMode("list")}
+                        className={cn("gap-2 h-8", stageMode === "list" && "bg-background shadow-sm text-foreground")}
                     >
-                        <LayoutGrid className="h-4 w-4" /> Board
+                        <List className="h-4 w-4" /> List
                     </Button>
                     <Button
-                        variant={isPlayerMode ? "secondary" : "ghost"}
+                        variant={stageMode === "grid" ? "secondary" : "ghost"}
                         size="sm"
-                        onClick={() => setPlayerMode(true)}
-                        className={cn("gap-2 h-8", isPlayerMode && "bg-background shadow-sm text-foreground")}
+                        onClick={() => setStageMode("grid")}
+                        className={cn("gap-2 h-8", stageMode === "grid" && "bg-background shadow-sm text-foreground")}
+                    >
+                        <LayoutGrid className="h-4 w-4" /> Grid
+                    </Button>
+                    <div className="w-px h-4 bg-border mx-1" />
+                    <Button
+                        variant={stageMode === "player" ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => setStageMode("player")}
+                        className={cn("gap-2 h-8", stageMode === "player" && "bg-background shadow-sm text-foreground")}
                     >
                         <PlayCircle className="h-4 w-4" /> Player
                     </Button>
@@ -166,13 +175,13 @@ export function StageManager() {
             {/* Content Area - Scrollable */}
             <div className="flex-1 relative overflow-y-auto">
                 {/* Main Content */}
-                {isPlayerMode ? (
+                {stageMode === "player" ? (
                     <div className="flex-1 h-full">
                         <PlayerView />
                     </div>
                 ) : (
                     <div className="flex-1 h-full">
-                        <ConceptView />
+                        <ConceptView viewMode={stageMode} />
                     </div>
                 )}
             </div>

@@ -15,7 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { StoryboardGrid } from "./StoryboardGrid";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Filter, List, PenTool, Loader2, Camera, GripVertical, Trash2 } from "lucide-react";
+import { List, PenTool, Loader2, Camera, GripVertical, Trash2, LayoutGrid, Plus, Filter, Sparkles } from "lucide-react";
+import { SceneCard } from "./SceneCard";
 import {
     DndContext,
     closestCenter,
@@ -46,7 +47,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, generatingScriptIds, generatingStoryboardIds, onDelete }: any) {
+function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, generatingScript, generatingStoryboard, onDelete }: any) {
     const {
         attributes,
         listeners,
@@ -156,10 +157,10 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
                                     size="sm"
                                     variant="outline"
                                     className="h-7 gap-2 text-xs"
-                                    disabled={generatingScriptIds.has(scene.id) || !!scene.script}
+                                    disabled={generatingScript || !!scene.script}
                                     onClick={() => onGenerateScript(scene.id)}
                                 >
-                                    {generatingScriptIds.has(scene.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <PenTool className="h-3 w-3" />}
+                                    {generatingScript ? <Loader2 className="h-3 w-3 animate-spin" /> : <PenTool className="h-3 w-3" />}
                                     {scene.script ? "Script Generated" : "Write Script with AI"}
                                 </Button>
                             </div>
@@ -178,10 +179,10 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
                                     size="sm"
                                     variant="outline"
                                     className="h-7 gap-2 text-xs"
-                                    disabled={generatingStoryboardIds.has(scene.id) || !scene.script}
+                                    disabled={generatingStoryboard || !scene.script}
                                     onClick={() => onGenerateStoryboard(scene.id)}
                                 >
-                                    {generatingStoryboardIds.has(scene.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                                    {generatingStoryboard ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
                                     {scene.shots && scene.shots.length > 0 ? "Regenerate Storyboard" : "Generate Storyboard"}
                                 </Button>
                                 {scene.master_image_url && (
@@ -209,12 +210,15 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
     );
 }
 
-export function SceneList() {
+export function SceneList({ viewMode }: { viewMode: "list" | "grid" }) {
     const { currentProject, setScenes } = useProject();
     const scenes = currentProject ? (currentProject.scenes || []) : MOCK_SCENES;
 
     const [generatingScriptIds, setGeneratingScriptIds] = useState<Set<number>>(new Set());
     const [generatingStoryboardIds, setGeneratingStoryboardIds] = useState<Set<number>>(new Set());
+    const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+
+    const gridCols = currentProject?.aspect_ratio === "9:16" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1 md:grid-cols-2";
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -320,75 +324,132 @@ export function SceneList() {
         }
     };
 
+    const handleAutoGenerateScenes = async () => {
+        if (!currentProject?.id) return;
+        setIsGeneratingScenes(true);
+        try {
+            const res = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}/generate-scenes`, {
+                method: "POST"
+            });
+            if (!res.ok) throw new Error("Failed to generate scenes");
+            const newScenes = await res.json();
+
+            // Append new scenes to existing ones or set them
+            // The backend returns the newly created scenes.
+            // If we want to fully refresh, we might want to refetch or just append.
+            // Let's assume we want to see them immediately.
+            setScenes([...scenes, ...newScenes]);
+
+        } catch (e) {
+            console.error("Error generating scenes", e);
+            alert("Failed to auto-generate scenes");
+        } finally {
+            setIsGeneratingScenes(false);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-background overflow-hidden relative">
-
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border bg-card/50 backdrop-blur-sm z-10">
-                <h2 className="text-xl font-bold tracking-tight">Scene List</h2>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="gap-2">
-                        <Filter className="h-4 w-4" /> Filter
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <List className="h-4 w-4" />
-                    </Button>
-                </div>
-            </div>
-
-            <div className="flex-1 overflow-auto">
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                >
-                    <SortableContext
-                        items={scenes.map(s => s.id)}
-                        strategy={verticalListSortingStrategy}
+            <div className="flex-1 overflow-auto p-4 md:p-6">
+                {viewMode === "list" ? (
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
                     >
-                        <Accordion type="single" collapsible className="w-full p-4">
-                            {scenes.map((scene) => (
-                                <SortableSceneItem
-                                    key={scene.id}
-                                    scene={scene}
-                                    onGenerateScript={handleGenerateScript}
-                                    onGenerateStoryboard={handleGenerateStoryboard}
-                                    generatingScriptIds={generatingScriptIds}
-                                    generatingStoryboardIds={generatingStoryboardIds}
-                                    onDelete={handleDeleteScene}
-                                />
-                            ))}
-                        </Accordion>
-                    </SortableContext>
-                </DndContext>
+                        <SortableContext
+                            items={scenes.map(s => s.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            <Accordion type="single" collapsible className="space-y-4 max-w-4xl mx-auto pb-20">
+                                {scenes.map((scene) => (
+                                    <SortableSceneItem
+                                        key={scene.id}
+                                        scene={scene}
+                                        onGenerateScript={handleGenerateScript}
+                                        onGenerateStoryboard={handleGenerateStoryboard}
+                                        generatingScript={generatingScriptIds.has(scene.id)}
+                                        generatingStoryboard={generatingStoryboardIds.has(scene.id)}
+                                        onDelete={handleDeleteScene}
+                                    />
+                                ))}
+                            </Accordion>
+                        </SortableContext>
+                    </DndContext>
+                ) : (
+                    /* Grid View */
+                    <div className={cn("grid gap-8 auto-rows-min pb-20", gridCols)}>
+                        {scenes.map((scene) => (
+                            <SceneCard
+                                key={scene.id}
+                                scene={scene}
+                                aspectRatio={currentProject?.aspect_ratio || "16:9"}
+                                onGenerateScript={handleGenerateScript}
+                                onGenerateStoryboard={handleGenerateStoryboard}
+                                onDelete={handleDeleteScene}
+                                generatingScript={generatingScriptIds.has(scene.id)}
+                                generatingStoryboard={generatingStoryboardIds.has(scene.id)}
+                            />
+                        ))}
+                    </div>
+                )}
 
-                <div className="p-4 border-t border-border">
-                    <Button
-                        variant="ghost"
-                        className="w-full border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/50 text-muted-foreground transition-all"
-                        onClick={async () => {
-                            if (!currentProject?.id) return;
-                            const defaultTitle = `Scene ${(scenes.length || 0) + 1}`;
-                            try {
-                                const response = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}/scenes/simple`, {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ title: defaultTitle, summary: "" })
-                                });
-                                if (response.ok) {
-                                    const newScene = await response.json();
-                                    setScenes([...scenes, newScene]);
+                {/* Empty State / Add Buttons */}
+                <div className="max-w-4xl mx-auto mt-8 flex flex-col items-center gap-4 pb-20">
+                    {scenes.length === 0 && (
+                        <div className="text-center space-y-4 py-8">
+                            <h3 className="text-lg font-medium text-muted-foreground">No scenes yet</h3>
+                            <p className="text-sm text-muted-foreground/80 max-w-md mx-auto">
+                                You can add scenes manually or let the AI structure the video for you based on the project details.
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="flex gap-4">
+                        <Button
+                            variant="outline"
+                            size="lg"
+                            className="w-full md:w-auto border-dashed hover:border-solid hover:bg-muted/50"
+                            onClick={async () => {
+                                if (!currentProject?.id) return;
+                                try {
+                                    const res = await fetch(`http://127.0.0.1:8000/api/projects/${currentProject.id}/scenes/simple`, {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ title: `Scene ${scenes.length + 1}` })
+                                    });
+                                    if (res.ok) {
+                                        const newScene = await res.json();
+                                        setScenes([...scenes, newScene]);
+                                    }
+                                } catch (e) {
+                                    console.error("Add scene failed", e);
                                 }
-                            } catch (e) {
-                                console.error(e);
-                            }
-                        }}
-                    >
-                        + Add New Scene
-                    </Button>
+                            }}
+                        >
+                            <Plus className="h-4 w-4 mr-2" /> Add New Scene
+                        </Button>
+
+                        <Button
+                            variant="default" // "magic" variant if we had one
+                            size="lg"
+                            className="w-full md:w-auto shadow-lg shadow-primary/20"
+                            onClick={handleAutoGenerateScenes}
+                            disabled={isGeneratingScenes}
+                        >
+                            {isGeneratingScenes ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating Structure...
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="h-4 w-4 mr-2" /> Auto-Generate Scenes
+                                </>
+                            )}
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
     );
 }
-
