@@ -48,6 +48,15 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+const API_BASE = "http://127.0.0.1:8000";
+
+// Helper to get full image URL
+const getFullImageUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    if (url.startsWith("http")) return url;
+    return `${API_BASE}${url}`;
+};
+
 function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, generatingScript, generatingStoryboard, onDelete }: any) {
     const {
         attributes,
@@ -114,7 +123,7 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
                                             <div
                                                 key={char.id}
                                                 className="h-6 w-6 rounded-full bg-neutral-700 border-2 border-background flex items-center justify-center text-[10px] font-semibold bg-cover bg-center"
-                                                style={char.image_url ? { backgroundImage: `url(${char.image_url})` } : {}}
+                                                style={char.image_url ? { backgroundImage: `url(${getFullImageUrl(char.image_url)})` } : {}}
                                                 title={char.name}
                                             >
                                                 {!char.image_url && char.name?.charAt(0)?.toUpperCase()}
@@ -133,7 +142,7 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
                                     className="h-10 w-16 bg-neutral-800 rounded bg-cover bg-center border border-white/10"
                                     style={{
                                         backgroundImage: scene.location?.image_url
-                                            ? `url(${scene.location.image_url.startsWith('http') ? scene.location.image_url : `http://127.0.0.1:8000${scene.location.image_url}`})`
+                                            ? `url(${getFullImageUrl(scene.location.image_url)})`
                                             : 'none'
                                     }}
                                 />

@@ -387,6 +387,7 @@ async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db
                 project_id=project.id,
                 name=char_name,
                 description=char_data.get("description", ""),
+                traits=char_data.get("traits", ""),
                 image_url=None  # Can be generated later
             )
             db.add(new_char)
@@ -402,6 +403,7 @@ async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db
                 project_id=project.id,
                 name=loc_name,
                 description=loc_data.get("description", ""),
+                ambiance=loc_data.get("ambiance", ""),
                 image_url=None  # Can be generated later
             )
             db.add(new_loc)
@@ -632,8 +634,10 @@ async def update_character(character_id: int, data: CharacterBase, db: Session =
         char.name = data.name
     if data.image_url is not None:
         char.image_url = data.image_url
-    if hasattr(data, 'description') and data.description is not None:
+    if data.description is not None:
         char.description = data.description
+    if data.traits is not None:
+        char.traits = data.traits
     
     db.commit()
     db.refresh(char)
@@ -681,8 +685,10 @@ async def update_location(location_id: int, data: LocationBase, db: Session = De
         loc.name = data.name
     if data.image_url is not None:
         loc.image_url = data.image_url
-    if hasattr(data, 'description') and data.description is not None:
+    if data.description is not None:
         loc.description = data.description
+    if data.ambiance is not None:
+        loc.ambiance = data.ambiance
     
     db.commit()
     db.refresh(loc)

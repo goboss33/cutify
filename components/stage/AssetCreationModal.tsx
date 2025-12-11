@@ -23,6 +23,8 @@ interface EditableAsset {
     id: number;
     name: string;
     description?: string;
+    traits?: string;      // For characters
+    ambiance?: string;    // For locations
     image_url?: string | null;
 }
 
@@ -67,9 +69,9 @@ export function AssetCreationModal({
                 // Edit mode - pre-fill
                 setName(editAsset.name || "");
                 setDescription(editAsset.description || "");
+                setTraits(editAsset.traits || "");
+                setAmbiance(editAsset.ambiance || "");
                 setGeneratedImageUrl(editAsset.image_url || null);
-                setTraits("");
-                setAmbiance("");
             } else {
                 // Create mode - reset
                 setName("");
@@ -155,6 +157,8 @@ export function AssetCreationModal({
                 body: JSON.stringify({
                     name: name.trim(),
                     description: description.trim(),
+                    traits: isCharacter ? traits.trim() : undefined,
+                    ambiance: !isCharacter ? ambiance.trim() : undefined,
                     image_url: generatedImageUrl,
                 }),
             });
@@ -218,7 +222,10 @@ export function AssetCreationModal({
                             style={
                                 generatedImageUrl
                                     ? {
-                                        backgroundImage: `url(${generatedImageUrl})`,
+                                        backgroundImage: `url(${generatedImageUrl.startsWith("http")
+                                                ? generatedImageUrl
+                                                : `${API_BASE}${generatedImageUrl}`
+                                            })`,
                                         backgroundSize: "cover",
                                         backgroundPosition: "center",
                                         borderStyle: "solid",

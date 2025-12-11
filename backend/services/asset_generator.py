@@ -28,6 +28,8 @@ Requirements:
 - Suitable for a movie character reference
 - 3:4 portrait aspect ratio
 - Photorealistic style
+
+OUTPUT: Generate ONE high-quality portrait image.
 """
     else:
         full_prompt = f"""
@@ -43,11 +45,14 @@ Requirements:
 - Suitable for a movie location reference
 - 16:9 landscape aspect ratio
 - Photorealistic style
+
+OUTPUT: Generate ONE high-quality environment image.
 """
     
     try:
-        # Use the same model as storyboard generation
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # Use the SAME model as storyboard generation (gemini-3-pro-image-preview)
+        # This is the only model that generates images natively
+        model = genai.GenerativeModel('gemini-3-pro-image-preview')
         
         response = await model.generate_content_async(full_prompt)
         

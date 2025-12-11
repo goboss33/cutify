@@ -74,6 +74,7 @@ class CharacterDB(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+    traits = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
 
     project = relationship("ProjectDB", back_populates="characters")
@@ -85,6 +86,7 @@ class LocationDB(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+    ambiance = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
 
     project = relationship("ProjectDB", back_populates="locations")
@@ -133,6 +135,7 @@ class ProjectBase(BaseModel):
 class CharacterBase(BaseModel):
     name: str
     description: str | None = None
+    traits: str | None = None
     image_url: str | None = None
 
 class Character(CharacterBase):
@@ -145,6 +148,7 @@ class Character(CharacterBase):
 class LocationBase(BaseModel):
     name: str
     description: str | None = None
+    ambiance: str | None = None
     image_url: str | None = None
 
 class Location(LocationBase):

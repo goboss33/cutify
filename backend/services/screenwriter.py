@@ -86,8 +86,8 @@ async def generate_scenes_with_assets(project_data: dict) -> dict:
     prompt = f"""
 You are an expert Screenwriter and Production Designer. Your job is to:
 1. Break down a video concept into 5-8 distinct scenes
-2. Identify ALL characters in the story
-3. Identify ALL locations/settings in the story
+2. Identify ALL characters in the story with their personality traits
+3. Identify ALL locations/settings in the story with their ambiance
 4. Map which characters and locations appear in each scene
 
 PROJECT TITLE: {project_data.get('title')}
@@ -109,13 +109,15 @@ Output STRICT JSON ONLY (no markdown). The structure must be:
     "characters": [
         {{
             "name": "Character Name",
-            "description": "Brief physical description (age, appearance, clothing)"
+            "description": "Brief physical description (age, appearance, clothing)",
+            "traits": "Personality traits (e.g. brave, cunning, gentle, fierce)"
         }}
     ],
     "locations": [
         {{
             "name": "Location Name",
-            "description": "Brief description of the place (ambiance, key visual elements)"
+            "description": "Brief description of the place (key visual elements)",
+            "ambiance": "Mood and atmosphere (e.g. tense, peaceful, mysterious, vibrant)"
         }}
     ]
 }}

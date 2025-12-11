@@ -15,6 +15,15 @@ import {
     DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
+const API_BASE = "http://127.0.0.1:8000";
+
+// Helper to get full image URL
+const getFullImageUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    if (url.startsWith("http")) return url;
+    return `${API_BASE}${url}`;
+};
+
 // Types for assets
 interface Character {
     id: number;
@@ -30,7 +39,7 @@ interface Location {
     image_url: string | null;
 }
 
-const API_BASE = "http://127.0.0.1:8000";
+
 
 export function AssetSidebar() {
     const { activeSceneId } = useStore();
@@ -129,7 +138,7 @@ export function AssetSidebar() {
     // Modal state
     const [modalOpen, setModalOpen] = useState(false);
     const [modalType, setModalType] = useState<"character" | "location">("character");
-    const [editingAsset, setEditingAsset] = useState<{ id: number; name: string; description?: string; image_url?: string | null } | null>(null);
+    const [editingAsset, setEditingAsset] = useState<{ id: number; name: string; description?: string; traits?: string; ambiance?: string; image_url?: string | null } | null>(null);
 
     // Open modal for character creation
     const openCharacterModal = () => {
@@ -152,6 +161,7 @@ export function AssetSidebar() {
         } else {
             setLocations(prev => [...prev, asset]);
         }
+        refreshProject();
     };
 
     // Handle asset updated
@@ -161,6 +171,7 @@ export function AssetSidebar() {
         } else {
             setLocations(prev => prev.map(l => l.id === asset.id ? asset : l));
         }
+        refreshProject();
     };
 
     // Delete character
@@ -200,6 +211,8 @@ export function AssetSidebar() {
             id: asset.id,
             name: asset.name,
             description: (asset as any).description,
+            traits: (asset as any).traits,
+            ambiance: (asset as any).ambiance,
             image_url: asset.image_url,
         });
         setModalType(type);
@@ -317,7 +330,7 @@ export function AssetSidebar() {
                                                             : "bg-neutral-700",
                                                         isLinked && "ring-2 ring-primary"
                                                     )}
-                                                        style={char.image_url ? { backgroundImage: `url(${char.image_url})` } : {}}
+                                                        style={char.image_url ? { backgroundImage: `url(${getFullImageUrl(char.image_url)})` } : {}}
                                                     >
                                                         {!char.image_url && (
                                                             <User className="h-5 w-5 text-neutral-400" />
@@ -403,7 +416,7 @@ export function AssetSidebar() {
                                                             : "bg-neutral-700",
                                                         isLinked && "ring-2 ring-primary"
                                                     )}
-                                                        style={loc.image_url ? { backgroundImage: `url(${loc.image_url})` } : {}}
+                                                        style={loc.image_url ? { backgroundImage: `url(${getFullImageUrl(loc.image_url)})` } : {}}
                                                     >
                                                         {!loc.image_url && (
                                                             <MapPin className="h-6 w-6 text-neutral-400" />
