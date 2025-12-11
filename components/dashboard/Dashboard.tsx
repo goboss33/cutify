@@ -23,13 +23,13 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CreateProjectDialog } from "@/components/dashboard/CreateProjectDialog";
+import { CreateProjectWizard } from "@/components/dashboard/CreateProjectWizard";
 
 export function Dashboard() {
     const { currentProject, setCurrentProject } = useProject();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<"list" | "create">("list");
     const [projectToDelete, setProjectToDelete] = useState<number | null>(null);
 
     const confirmDeleteProject = async () => {
@@ -129,7 +129,19 @@ export function Dashboard() {
     const handleProjectCreated = (newProject: Project) => {
         setProjects(prev => [...prev, newProject]);
         setCurrentProject(newProject);
+        setViewMode("list");
     };
+
+    if (viewMode === "create") {
+        return (
+            <div className="flex-1 p-8 overflow-y-auto bg-background/50 h-full">
+                <CreateProjectWizard
+                    onCancel={() => setViewMode("list")}
+                    onProjectCreated={handleProjectCreated}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="flex-1 p-8 overflow-y-auto bg-background/50 h-full">
@@ -149,7 +161,7 @@ export function Dashboard() {
                     {/* New Project Card */}
                     <Card
                         className="group cursor-pointer border-2 border-dashed border-muted bg-muted/5 hover:border-primary/50 hover:bg-muted/10 transition-all flex flex-col items-center justify-center min-h-[250px]"
-                        onClick={() => setIsDialogOpen(true)}
+                        onClick={() => setViewMode("create")}
                     >
                         <CardContent className="flex flex-col items-center justify-center p-6 text-center">
                             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors">
@@ -159,12 +171,6 @@ export function Dashboard() {
                             <p className="text-sm text-muted-foreground/60 mt-2">Start a new video concept</p>
                         </CardContent>
                     </Card>
-
-                    <CreateProjectDialog
-                        open={isDialogOpen}
-                        onOpenChange={setIsDialogOpen}
-                        onProjectCreated={handleProjectCreated}
-                    />
 
                     {/* Existing Projects */}
                     {projects.map((project) => (
