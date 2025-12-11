@@ -152,6 +152,7 @@ from services.screenwriter import generate_scenes_breakdown
 from services.scriptwriter import generate_scene_script
 from services.director import generate_storyboard
 from services.image_processor import slice_grid_image
+from services.asset_generator import generate_asset_image
 from database import SessionLocal
 from models import ProjectDB, Project, SceneDB, Scene, ShotDB, Shot, CharacterDB, LocationDB, scene_characters, Character, Location, CharacterBase, LocationBase
 from fastapi.staticfiles import StaticFiles
@@ -512,6 +513,25 @@ async def reorder_scenes_endpoint(project_id: int, input_data: ReorderScenesInpu
             
     db.commit()
     return {"message": "Scenes reordered successfully"}
+
+# ========================================
+# ASSET IMAGE GENERATION
+# ========================================
+
+class GenerateAssetImageInput(BaseModel):
+    prompt: str
+    type: str  # "character" or "location"
+    name: str
+
+@app.post("/api/generate-asset-image")
+async def generate_asset_image_endpoint(data: GenerateAssetImageInput):
+    """Generate an image for a character or location using Gemini."""
+    image_url = await generate_asset_image(data.prompt, data.type, data.name)
+    
+    if not image_url:
+        raise HTTPException(status_code=500, detail="Image generation failed")
+    
+    return {"image_url": image_url}
 
 # ========================================
 # ASSET ENDPOINTS: Characters & Locations
