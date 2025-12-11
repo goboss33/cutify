@@ -105,10 +105,39 @@ function SortableSceneItem({ scene, onGenerateScript, onGenerateStoryboard, gene
                                 </div>
                             </div>
 
-                            {/* Right side thumbnail - Pushed to right */}
-                            <div className="hidden sm:block h-10 w-16 bg-neutral-800 rounded bg-cover bg-center shrink-0 border border-white/10"
-                                style={{ backgroundImage: scene.shots && scene.shots[0] ? `url(${scene.shots[0].image_url?.startsWith('http') ? scene.shots[0].image_url : `http://127.0.0.1:8000${scene.shots[0].image_url}`})` : 'none' }}
-                            />
+                            {/* Right side: Character Icons + Thumbnail */}
+                            <div className="hidden sm:flex items-center gap-2 shrink-0">
+                                {/* Character Icons - max 3 + overflow */}
+                                {scene.characters && scene.characters.length > 0 && (
+                                    <div className="flex -space-x-1.5">
+                                        {scene.characters.slice(0, 3).map((char: any) => (
+                                            <div
+                                                key={char.id}
+                                                className="h-6 w-6 rounded-full bg-neutral-700 border-2 border-background flex items-center justify-center text-[10px] font-semibold bg-cover bg-center"
+                                                style={char.image_url ? { backgroundImage: `url(${char.image_url})` } : {}}
+                                                title={char.name}
+                                            >
+                                                {!char.image_url && char.name?.charAt(0)?.toUpperCase()}
+                                            </div>
+                                        ))}
+                                        {scene.characters.length > 3 && (
+                                            <div className="h-6 w-6 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-medium text-muted-foreground">
+                                                +{scene.characters.length - 3}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Thumbnail - Location or placeholder */}
+                                <div
+                                    className="h-10 w-16 bg-neutral-800 rounded bg-cover bg-center border border-white/10"
+                                    style={{
+                                        backgroundImage: scene.location?.image_url
+                                            ? `url(${scene.location.image_url.startsWith('http') ? scene.location.image_url : `http://127.0.0.1:8000${scene.location.image_url}`})`
+                                            : 'none'
+                                    }}
+                                />
+                            </div>
                         </div>
                     </AccordionTrigger>
 

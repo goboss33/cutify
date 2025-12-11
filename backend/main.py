@@ -153,7 +153,7 @@ from services.scriptwriter import generate_scene_script
 from services.director import generate_storyboard
 from services.image_processor import slice_grid_image
 from database import SessionLocal
-from models import ProjectDB, Project, SceneDB, Scene, ShotDB, Shot
+from models import ProjectDB, Project, SceneDB, Scene, ShotDB, Shot, CharacterDB, LocationDB, scene_characters, Character, Location, CharacterBase, LocationBase
 from fastapi.staticfiles import StaticFiles
 
 # Mount static directory
@@ -513,6 +513,149 @@ async def reorder_scenes_endpoint(project_id: int, input_data: ReorderScenesInpu
     db.commit()
     return {"message": "Scenes reordered successfully"}
 
+# ========================================
+# ASSET ENDPOINTS: Characters & Locations
+# ========================================
+
+# --- Characters CRUD ---
+@app.get("/api/projects/{project_id}/characters", response_model=list[Character])
+async def get_project_characters(project_id: int, db: Session = Depends(get_db)):
+    characters = db.query(CharacterDB).filter(CharacterDB.project_id == project_id).all()
+    return characters
+
+@app.post("/api/projects/{project_id}/characters", response_model=Character)
+async def create_character(project_id: int, data: CharacterBase, db: Session = Depends(get_db)):
+    # Verify Project
+    project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    new_char = CharacterDB(
+        project_id=project_id,
+        name=data.name,
+        image_url=data.image_url
+    )
+    db.add(new_char)
+    db.commit()
+    db.refresh(new_char)
+    return new_char
+
+@app.delete("/api/characters/{character_id}")
+async def delete_character(character_id: int, db: Session = Depends(get_db)):
+    char = db.query(CharacterDB).filter(CharacterDB.id == character_id).first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    db.delete(char)
+    db.commit()
+    return {"message": "Character deleted successfully"}
+
+# --- Locations CRUD ---
+@app.get("/api/projects/{project_id}/locations", response_model=list[Location])
+async def get_project_locations(project_id: int, db: Session = Depends(get_db)):
+    locations = db.query(LocationDB).filter(LocationDB.project_id == project_id).all()
+    return locations
+
+@app.post("/api/projects/{project_id}/locations", response_model=Location)
+async def create_location(project_id: int, data: LocationBase, db: Session = Depends(get_db)):
+    # Verify Project
+    project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    new_loc = LocationDB(
+        project_id=project_id,
+        name=data.name,
+        image_url=data.image_url
+    )
+    db.add(new_loc)
+    db.commit()
+    db.refresh(new_loc)
+    return new_loc
+
+@app.delete("/api/locations/{location_id}")
+async def delete_location(location_id: int, db: Session = Depends(get_db)):
+    loc = db.query(LocationDB).filter(LocationDB.id == location_id).first()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Location not found")
+    db.delete(loc)
+    db.commit()
+    return {"message": "Location deleted successfully"}
+
+# --- Scene-Character Association (Toggle) ---
+@app.post("/api/scenes/{scene_id}/characters/{character_id}")
+async def toggle_scene_character(scene_id: int, character_id: int, db: Session = Depends(get_db)):
+    """Toggle character association with scene. If already linked, unlink. If not, link."""
+    # Verify scene and character exist
+    scene = db.query(SceneDB).filter(SceneDB.id == scene_id).first()
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    
+    char = db.query(CharacterDB).filter(CharacterDB.id == character_id).first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Check existing association using the Table
+    from sqlalchemy import select, delete, insert
+    existing = db.execute(
+        select(scene_characters).where(
+            scene_characters.c.scene_id == scene_id,
+            scene_characters.c.character_id == character_id
+        )
+    ).first()
+    
+    if existing:
+        # Unlink
+        db.execute(
+            delete(scene_characters).where(
+                scene_characters.c.scene_id == scene_id,
+                scene_characters.c.character_id == character_id
+            )
+        )
+        db.commit()
+        return {"action": "unlinked", "scene_id": scene_id, "character_id": character_id}
+    else:
+        # Link
+        db.execute(
+            insert(scene_characters).values(scene_id=scene_id, character_id=character_id)
+        )
+        db.commit()
+        return {"action": "linked", "scene_id": scene_id, "character_id": character_id}
+
+# --- Scene-Location Association (Set/Unset) ---
+@app.post("/api/scenes/{scene_id}/location/{location_id}")
+async def set_scene_location(scene_id: int, location_id: int, db: Session = Depends(get_db)):
+    """Set scene location. If same location, unset it (toggle)."""
+    scene = db.query(SceneDB).filter(SceneDB.id == scene_id).first()
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    
+    loc = db.query(LocationDB).filter(LocationDB.id == location_id).first()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    if scene.location_id == location_id:
+        # Toggle off
+        scene.location_id = None
+        db.commit()
+        return {"action": "unset", "scene_id": scene_id, "location_id": None}
+    else:
+        # Set new location
+        scene.location_id = location_id
+        db.commit()
+        return {"action": "set", "scene_id": scene_id, "location_id": location_id}
+
+@app.delete("/api/scenes/{scene_id}/location")
+async def unset_scene_location(scene_id: int, db: Session = Depends(get_db)):
+    """Remove location from scene."""
+    scene = db.query(SceneDB).filter(SceneDB.id == scene_id).first()
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    
+    scene.location_id = None
+    db.commit()
+    return {"message": "Location removed from scene"}
+
 @app.get("/")
 async def root():
-    return {"message": "Cutify Backend v0.5 is running"}
+    return {"message": "Cutify Backend v0.6 is running"}
+

@@ -1,8 +1,17 @@
 from pydantic import BaseModel
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Table
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
+
+# Association table for Scene <-> Character (many-to-many)
+# Must be defined before the classes that reference it
+scene_characters = Table(
+    'scene_characters',
+    Base.metadata,
+    Column('scene_id', Integer, ForeignKey('scenes.id'), primary_key=True),
+    Column('character_id', Integer, ForeignKey('characters.id'), primary_key=True)
+)
 
 # --- SQLAlchemy Models ---
 class ProjectDB(Base):
@@ -23,6 +32,8 @@ class ProjectDB(Base):
     
     scenes = relationship("SceneDB", back_populates="project", cascade="all, delete-orphan", order_by="SceneDB.sequence_order")
     chat_history = relationship("ChatMessageDB", back_populates="project", cascade="all, delete-orphan")
+    characters = relationship("CharacterDB", back_populates="project", cascade="all, delete-orphan")
+    locations = relationship("LocationDB", back_populates="project", cascade="all, delete-orphan")
 
 class SceneDB(Base):
     __tablename__ = "scenes"
@@ -36,9 +47,12 @@ class SceneDB(Base):
     estimated_duration = Column(String)
     master_image_url = Column(String, nullable=True) # URL of the 3x3 grid
     status = Column(String, default="pending")
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
 
     project = relationship("ProjectDB", back_populates="scenes")
     shots = relationship("ShotDB", back_populates="scene", cascade="all, delete-orphan")
+    location = relationship("LocationDB")
+    characters = relationship("CharacterDB", secondary=scene_characters)
 
 class ShotDB(Base):
     __tablename__ = "shots"
@@ -51,6 +65,29 @@ class ShotDB(Base):
     status = Column(String, default="generating")
 
     scene = relationship("SceneDB", back_populates="shots")
+
+# --- Asset Models ---
+class CharacterDB(Base):
+    __tablename__ = "characters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    name = Column(String, nullable=False)
+    image_url = Column(String, nullable=True)
+
+    project = relationship("ProjectDB", back_populates="characters")
+
+class LocationDB(Base):
+    __tablename__ = "locations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    name = Column(String, nullable=False)
+    image_url = Column(String, nullable=True)
+
+    project = relationship("ProjectDB", back_populates="locations")
+
+# SceneCharacterDB class removed - using Table() association instead
 
 class ChatMessageDB(Base):
     __tablename__ = "chat_messages"
@@ -90,6 +127,29 @@ class ProjectBase(BaseModel):
     aspect_ratio: str = "16:9"
     status: str = "concept"
 
+# --- Asset Pydantic Schemas ---
+class CharacterBase(BaseModel):
+    name: str
+    image_url: str | None = None
+
+class Character(CharacterBase):
+    id: int
+    project_id: int
+
+    class Config:
+        from_attributes = True
+
+class LocationBase(BaseModel):
+    name: str
+    image_url: str | None = None
+
+class Location(LocationBase):
+    id: int
+    project_id: int
+
+    class Config:
+        from_attributes = True
+
 class SceneBase(BaseModel):
     title: str
     summary: str
@@ -97,6 +157,7 @@ class SceneBase(BaseModel):
     estimated_duration: str | None = None
     master_image_url: str | None = None
     sequence_order: int | None = None
+    location_id: int | None = None
 
 class SceneCreate(SceneBase):
     pass
@@ -106,6 +167,8 @@ class Scene(SceneBase):
     project_id: int
     status: str
     shots: list["Shot"] = []
+    location: Location | None = None
+    characters: list[Character] = []
 
     class Config:
         from_attributes = True
@@ -130,6 +193,9 @@ class Project(ProjectBase):
     id: int
     created_at: datetime
     scenes: list[Scene] = []
+    characters: list[Character] = []
+    locations: list[Location] = []
 
     class Config:
         from_attributes = True
+

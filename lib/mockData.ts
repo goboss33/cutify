@@ -12,6 +12,21 @@ export interface Message {
     timestamp: string;
 }
 
+// Asset Types
+export interface Character {
+    id: number;
+    project_id: number;
+    name: string;
+    image_url: string | null;
+}
+
+export interface Location {
+    id: number;
+    project_id: number;
+    name: string;
+    image_url: string | null;
+}
+
 export interface Shot {
     id: number; // Changed to number to match ID
     scene_id: number;
@@ -33,6 +48,9 @@ export interface Scene {
     estimated_duration?: string;
     master_image_url?: string;
     status: 'pending' | 'scripted' | 'storyboarded' | 'done' | 'in-progress';
+    location_id?: number | null;
+    location?: Location | null;
+    characters?: Character[];
 
     // UI specific (optional or computed later)
     shotsCount?: number;
@@ -49,9 +67,14 @@ export interface Project {
     pitch?: string;
     visual_style?: string;
     target_audience?: string;
+    language?: string;
+    target_duration?: string;
+    aspect_ratio?: string;
     status: string;
     created_at?: string;
     scenes?: Scene[]; // Included in fetch
+    characters?: Character[];
+    locations?: Location[];
 }
 
 // MOCK DATA
