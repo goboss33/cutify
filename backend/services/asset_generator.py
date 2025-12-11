@@ -2,6 +2,7 @@ import google.generativeai as genai
 import os
 import uuid
 from pathlib import Path
+from services.ai_logger import AILogger
 
 # Configure Gemini
 GENAI_API_KEY = os.getenv("GENAI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -58,12 +59,23 @@ Requirements:
 OUTPUT: Generate ONE high-quality environment image.
 """
     
+    log_id = None
     try:
         # Use the SAME model as storyboard generation (gemini-3-pro-image-preview)
         # This is the only model that generates images natively
         model = genai.GenerativeModel('gemini-3-pro-image-preview')
         
+
+        
+        # Log Interaction
+        log_id = AILogger.log_interaction(
+            service=f"AssetGenerator ({asset_type})", 
+            prompt=full_prompt
+        )
+        
         response = await model.generate_content_async(full_prompt)
+        
+
         
         # Extract image from response
         if response.parts:
@@ -82,11 +94,28 @@ OUTPUT: Generate ONE high-quality environment image.
                         f.write(image_data)
                     
                     # Return URL path
-                    return f"/static/assets/{filename}"
+                    url = f"/static/assets/{filename}"
+                    AILogger.update_interaction(
+                        log_id=log_id,
+                        response="Image generated successfully",
+                        images=[url]
+                    )
+                    return url
         
         print(f"No image in Gemini response for asset. Text: {response.text[:200] if response.text else 'None'}")
         return None
         
     except Exception as e:
         print(f"Error generating asset image: {e}")
+        if log_id:
+            AILogger.update_interaction(
+                log_id=log_id,
+                error=str(e)
+            )
+        else:
+             AILogger.log_interaction(
+                service=f"AssetGenerator ({asset_type})",
+                prompt="Pre-execution Error",
+                error=str(e)
+            )
         return None

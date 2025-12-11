@@ -4,6 +4,7 @@ import json
 import asyncio
 from PIL import Image
 from io import BytesIO
+from services.ai_logger import AILogger
 
 # Configure Gemini
 GENAI_API_KEY = os.getenv("GENAI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -24,10 +25,10 @@ image_model_name = 'gemini-2.0-flash-exp'
 # Actually, 'gemini-2.0-flash-exp' is the latest widely known. 'gemini-3-pro-image-preview' sounds like a very specific experimental tag.
 # I will use it.
 
-async def generate_storyboard(scene_script: str, project_context: dict, assets: list = []) -> bytes:
+async def generate_storyboard(scene_script: str | None, project_context: dict, assets: list = []) -> tuple[bytes | None, str | None]:
     """
     Generates a single 3x3 storyboard grid image using Gemini.
-    Returns the image bytes.
+    Returns (image_bytes, log_id).
     """
     
     style = project_context.get('visual_style', 'Cinematic')
@@ -97,6 +98,7 @@ Then, Generate the ONE Master Contact Sheet Image.
 </final output format>
     """
     
+    log_id = None
     try:
         # Prepare content list (Prompt + Images)
         contents = [prompt]
@@ -115,20 +117,48 @@ Then, Generate the ONE Master Contact Sheet Image.
         # Use the specific experimental model requested by the user
         storyboard_model = genai.GenerativeModel('gemini-3-pro-image-preview') 
         
+        # Log before call
+        image_paths = [a.get('image_path') for a in assets] if assets else []
+        log_id = AILogger.log_interaction(
+            service="Director (Storyboard)",
+            prompt=prompt,
+            images=image_paths
+        )
+        
         response = await storyboard_model.generate_content_async(contents)
+        
+
         
         # Extract Image
         # Look for inline_data
         if response.parts:
             for part in response.parts:
                 if hasattr(part, 'inline_data') and part.inline_data:
-                    return part.inline_data.data
+                    return (part.inline_data.data, log_id)
                 
         # If no image found, print the text to debug rejection
         print(f"No image found in Gemini response. Text content: {response.text}")
-        return None
+        try:
+            AILogger.update_interaction(log_id=log_id, response=response.text[:500], status="error")
+        except:
+            pass
+        return (None, log_id)
 
     except Exception as e:
         print(f"Error generating storyboard: {e}")
-        return None
+        try:
+            if log_id:
+                AILogger.update_interaction(
+                    log_id=log_id, 
+                    error=str(e)
+                )
+            else:
+                AILogger.log_interaction(
+                    service="Director (Storyboard)",
+                    prompt="Pre-execution Error",
+                    error=str(e)
+                )
+        except:
+            pass
+        return (None, None)
 

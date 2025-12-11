@@ -532,7 +532,7 @@ async def generate_storyboard_endpoint(scene_id: int, db: Session = Depends(get_
     base_text = scene.script if scene.script else scene.summary
     
     print(f"Generating storyboard for scene {scene_id} with {len(assets)} reference assets...")
-    master_image_bytes = await generate_storyboard(base_text, project_context, assets)
+    master_image_bytes, log_id = await generate_storyboard(base_text, project_context, assets)
     
     if not master_image_bytes:
         from fastapi import HTTPException
@@ -541,6 +541,14 @@ async def generate_storyboard_endpoint(scene_id: int, db: Session = Depends(get_
     # 3. Slice Image into Shots
     print("Slicing master grid...")
     shot_urls, master_url = slice_grid_image(master_image_bytes, output_dir="static/shots", scene_id=scene_id)
+    
+    # Log Success with Image
+    if log_id:
+        AILogger.update_interaction(
+            log_id=log_id,
+            response="Storyboard grid generated and sliced.",
+            images=[master_url]
+        )
     
     if not shot_urls:
          from fastapi import HTTPException
@@ -799,6 +807,18 @@ async def unset_scene_location(scene_id: int, db: Session = Depends(get_db)):
     scene.location_id = None
     db.commit()
     return {"message": "Location removed from scene"}
+
+# --- Debug Endpoints ---
+from services.ai_logger import AILogger
+
+@app.get("/api/debug/ai-logs")
+async def get_ai_logs():
+    return AILogger.get_logs()
+
+@app.delete("/api/debug/ai-logs")
+async def clear_ai_logs():
+    AILogger.clear_logs()
+    return {"status": "cleared"}
 
 @app.get("/")
 async def root():

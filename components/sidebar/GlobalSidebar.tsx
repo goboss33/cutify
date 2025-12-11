@@ -3,12 +3,14 @@
 import React, { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import {
     Folder,
     Image as ImageIcon,
     ChevronLeft,
     ChevronRight,
-    LayoutGrid
+    LayoutGrid,
+    Terminal
 } from "lucide-react";
 import { UserProfile } from "./UserProfile";
 import { useStore } from "@/store/useStore";
@@ -18,6 +20,7 @@ export function GlobalSidebar() {
     const [isCollapsed, setIsCollapsed] = useState(true); // Default collapsed
     const { currentView, setCurrentView } = useStore();
     const { setCurrentProject } = useProject();
+    const router = useRouter();
 
     // Navigation Items
     const navItems = [
@@ -28,6 +31,7 @@ export function GlobalSidebar() {
             onClick: () => {
                 setCurrentProject(null);
                 setCurrentView('dashboard');
+                router.push('/');
             }
         },
         {
@@ -37,7 +41,14 @@ export function GlobalSidebar() {
             onClick: () => {
                 setCurrentProject(null);
                 setCurrentView('assets');
+                router.push('/');
             }
+        },
+        {
+            label: "AI Console",
+            icon: Terminal,
+            view: 'debug',
+            onClick: () => router.push('/debug')
         }
     ];
 
