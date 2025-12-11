@@ -73,6 +73,7 @@ class CharacterDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
 
     project = relationship("ProjectDB", back_populates="characters")
@@ -83,6 +84,7 @@ class LocationDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"))
     name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
 
     project = relationship("ProjectDB", back_populates="locations")

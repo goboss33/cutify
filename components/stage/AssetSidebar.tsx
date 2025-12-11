@@ -38,16 +38,19 @@ export function AssetSidebar() {
     const sceneCharacterIds = new Set(activeScene?.characters?.map(c => c.id) || []);
     const sceneLocationId = activeScene?.location_id || activeScene?.location?.id || null;
 
-    // Fetch project assets on mount
+    // Fetch project assets on mount and when scenes change (after generation)
+    const projectId = currentProject?.id;
+    const scenesCount = currentProject?.scenes?.length ?? 0;
+
     useEffect(() => {
-        if (!currentProject?.id) return;
+        if (!projectId) return;
 
         const fetchAssets = async () => {
             setLoading(true);
             try {
                 const [charsRes, locsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/projects/${currentProject.id}/characters`),
-                    fetch(`${API_BASE}/api/projects/${currentProject.id}/locations`)
+                    fetch(`${API_BASE}/api/projects/${projectId}/characters`),
+                    fetch(`${API_BASE}/api/projects/${projectId}/locations`)
                 ]);
                 if (charsRes.ok) setCharacters(await charsRes.json());
                 if (locsRes.ok) setLocations(await locsRes.json());
@@ -59,7 +62,7 @@ export function AssetSidebar() {
         };
 
         fetchAssets();
-    }, [currentProject?.id]);
+    }, [projectId, scenesCount]);
 
     // Optimistic state for immediate UI feedback
     const [optimisticCharacterIds, setOptimisticCharacterIds] = useState<Set<number> | null>(null);

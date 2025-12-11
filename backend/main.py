@@ -358,6 +358,8 @@ async def create_simple_scene_endpoint(project_id: int, input_data: CreateSceneI
     db.refresh(new_scene)
     return new_scene
 
+from services.screenwriter import generate_scenes_with_assets
+
 @app.post("/api/projects/{project_id}/generate-scenes", response_model=list[Scene])
 async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db)):
     # 1. Fetch Project
@@ -366,7 +368,7 @@ async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # 2. Call Screenwriter AI
+    # 2. Call Screenwriter AI with assets extraction
     project_data = {
         "title": project.title,
         "genre": project.genre,
@@ -374,25 +376,76 @@ async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db
         "visual_style": project.visual_style
     }
     
-    scenes_data = await generate_scenes_breakdown(project_data)
+    result = await generate_scenes_with_assets(project_data)
     
-    # 3. Save to DB
+    # 3. Create Characters in DB
+    character_map = {}  # name -> CharacterDB
+    for char_data in result.get("characters", []):
+        char_name = char_data.get("name", "")
+        if char_name and char_name not in character_map:
+            new_char = CharacterDB(
+                project_id=project.id,
+                name=char_name,
+                description=char_data.get("description", ""),
+                image_url=None  # Can be generated later
+            )
+            db.add(new_char)
+            db.flush()  # Get ID without committing
+            character_map[char_name] = new_char
+    
+    # 4. Create Locations in DB
+    location_map = {}  # name -> LocationDB
+    for loc_data in result.get("locations", []):
+        loc_name = loc_data.get("name", "")
+        if loc_name and loc_name not in location_map:
+            new_loc = LocationDB(
+                project_id=project.id,
+                name=loc_name,
+                description=loc_data.get("description", ""),
+                image_url=None  # Can be generated later
+            )
+            db.add(new_loc)
+            db.flush()  # Get ID without committing
+            location_map[loc_name] = new_loc
+    
+    # 5. Create Scenes with associations
     new_scenes = []
-    for i, scene_item in enumerate(scenes_data):
+    for i, scene_item in enumerate(result.get("scenes", [])):
+        # Get location for this scene
+        scene_location_name = scene_item.get("location_name", "")
+        scene_location = location_map.get(scene_location_name)
+        
         new_scene = SceneDB(
             project_id=project.id,
             sequence_order=i + 1,
             title=scene_item.get("title", f"Scene {i+1}"),
             summary=scene_item.get("summary", ""),
             estimated_duration=scene_item.get("estimated_duration", ""),
-            status="pending"
+            status="pending",
+            location_id=scene_location.id if scene_location else None
         )
         db.add(new_scene)
-        new_scenes.append(new_scene)
+        db.flush()  # Get scene ID
         
+        # Associate characters to this scene
+        scene_char_names = scene_item.get("character_names", [])
+        for char_name in scene_char_names:
+            char = character_map.get(char_name)
+            if char:
+                # Insert into scene_characters association table
+                from sqlalchemy import insert
+                db.execute(
+                    insert(scene_characters).values(
+                        scene_id=new_scene.id,
+                        character_id=char.id
+                    )
+                )
+        
+        new_scenes.append(new_scene)
+    
     db.commit()
     
-    # Refresh to get IDs
+    # Refresh to get IDs and relations
     for s in new_scenes:
         db.refresh(s)
         

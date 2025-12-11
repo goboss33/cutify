@@ -63,3 +63,93 @@ async def generate_scenes_breakdown(project_data: dict) -> list[dict]:
         print(f"Error in generate_scenes_breakdown: {e}")
         # Return a fallback or re-raise
         raise e
+
+
+async def generate_scenes_with_assets(project_data: dict) -> dict:
+    """
+    Uses Gemini to break down a project concept into scenes WITH characters and locations.
+    Also determines which characters/locations appear in each scene.
+    
+    Args:
+        project_data (dict): Contains 'title', 'pitch', 'visual_style', etc.
+        
+    Returns:
+        dict: {
+            "scenes": [...],
+            "characters": [...],
+            "locations": [...],
+            "scene_character_map": {scene_index: [character_indices]},
+            "scene_location_map": {scene_index: location_index}
+        }
+    """
+    
+    prompt = f"""
+You are an expert Screenwriter and Production Designer. Your job is to:
+1. Break down a video concept into 5-8 distinct scenes
+2. Identify ALL characters in the story
+3. Identify ALL locations/settings in the story
+4. Map which characters and locations appear in each scene
+
+PROJECT TITLE: {project_data.get('title')}
+GENRE: {project_data.get('genre')}
+PITCH: {project_data.get('pitch')}
+VISUAL STYLE: {project_data.get('visual_style')}
+
+Output STRICT JSON ONLY (no markdown). The structure must be:
+{{
+    "scenes": [
+        {{
+            "title": "Scene title",
+            "summary": "2 sentences describing the action",
+            "estimated_duration": "~30s",
+            "character_names": ["Character Name 1", "Character Name 2"],
+            "location_name": "Location Name"
+        }}
+    ],
+    "characters": [
+        {{
+            "name": "Character Name",
+            "description": "Brief physical description (age, appearance, clothing)"
+        }}
+    ],
+    "locations": [
+        {{
+            "name": "Location Name",
+            "description": "Brief description of the place (ambiance, key visual elements)"
+        }}
+    ]
+}}
+
+IMPORTANT:
+- Character names and location names in scenes MUST match exactly those in the characters/locations arrays
+- Every character and location must appear in at least one scene
+- Be consistent with naming throughout
+"""
+    
+    try:
+        response = await model.generate_content_async(prompt)
+        text_response = response.text
+        
+        # Cleanup potential markdown code blocks
+        clean_text = text_response.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text[7:]
+        if clean_text.startswith("```"):
+            clean_text = clean_text[3:]
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+            
+        result = json.loads(clean_text)
+        
+        # Validate structure
+        if not isinstance(result, dict):
+            raise ValueError("AI response is not a dict")
+        if "scenes" not in result or "characters" not in result or "locations" not in result:
+            raise ValueError("Missing required keys in AI response")
+            
+        return result
+        
+    except Exception as e:
+        print(f"Error in generate_scenes_with_assets: {e}")
+        raise e
+
