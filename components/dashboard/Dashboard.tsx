@@ -30,6 +30,7 @@ import {
 import { Slider } from "@/components/ui/slider"
 import { GenreSelector } from "@/components/dashboard/GenreSelector";
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { useProject } from "@/store/ProjectContext";
 import { Project } from "@/types/project";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -54,6 +55,28 @@ const LANGUAGES = [
     { code: "German", label: "German", icon: FlagDE },
 ];
 
+const TARGET_AUDIENCES = [
+    "General Audience",
+    "Kids & Family",
+    "Teens",
+    "Young Adults",
+    "Professionals",
+    "Tech Enthusiasts",
+    "Gamers",
+    "Lifestyle"
+];
+
+const VISUAL_STYLES = [
+    "Cinematic",
+    "Minimalist",
+    "Vlog / Handheld",
+    "Documentary",
+    "Animation / 3D",
+    "Retro / Vintage",
+    "Cyberpunk / Futuristic",
+    "Corporate / Clean"
+];
+
 export function Dashboard() {
     const { currentProject, setCurrentProject } = useProject();
     const [projects, setProjects] = useState<Project[]>([]);
@@ -67,6 +90,10 @@ export function Dashboard() {
     const [language, setLanguage] = useState("French");
     const [durationSeconds, setDurationSeconds] = useState([60]); // Default 60s
     const [aspectRatio, setAspectRatio] = useState("16:9");
+    const [pitch, setPitch] = useState("");
+    const [targetAudience, setTargetAudience] = useState("");
+    const [visualStyle, setVisualStyle] = useState("");
+
     const [isCreating, setIsCreating] = useState(false);
 
     const confirmDeleteProject = async () => {
@@ -160,9 +187,9 @@ export function Dashboard() {
                     language,
                     target_duration: durationStr,
                     aspect_ratio: aspectRatio,
-                    pitch: "",
-                    target_audience: "",
-                    visual_style: ""
+                    pitch: pitch,
+                    target_audience: targetAudience,
+                    visual_style: visualStyle
                 })
             });
 
@@ -180,6 +207,9 @@ export function Dashboard() {
             setLanguage("French");
             setDurationSeconds([60]);
             setAspectRatio("16:9");
+            setPitch("");
+            setTargetAudience("");
+            setVisualStyle("");
         } catch (e) {
             console.error("Failed to create project", e);
             alert("Error creating project. Please try again.");
@@ -249,7 +279,7 @@ export function Dashboard() {
                                 </CardContent>
                             </Card>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[500px]">
+                        <DialogContent className="sm:max-w-[700px] overflow-y-auto max-h-[90vh]">
                             <DialogHeader>
                                 <DialogTitle>Create New Project</DialogTitle>
                                 <DialogDescription>
@@ -274,6 +304,45 @@ export function Dashboard() {
                                         Genre
                                     </label>
                                     <GenreSelector value={newGenre} onChange={setNewGenre} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <label className="text-sm font-medium">Pitch / Key Ideas</label>
+                                    <Textarea
+                                        placeholder="Describe your video idea to guide the AI..."
+                                        value={pitch}
+                                        onChange={(e) => setPitch(e.target.value)}
+                                        className="h-24 resize-none"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid gap-2">
+                                        <label className="text-sm font-medium">Target Audience</label>
+                                        <Select value={targetAudience} onValueChange={setTargetAudience}>
+                                            <SelectTrigger className="h-10">
+                                                <SelectValue placeholder="Who is this for?" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {TARGET_AUDIENCES.map((a) => (
+                                                    <SelectItem key={a} value={a}>{a}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <label className="text-sm font-medium">Visual Style</label>
+                                        <Select value={visualStyle} onValueChange={setVisualStyle}>
+                                            <SelectTrigger className="h-10">
+                                                <SelectValue placeholder="Cinematic? Cartoon? Noir?" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {VISUAL_STYLES.map((s) => (
+                                                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
