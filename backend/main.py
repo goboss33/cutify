@@ -622,6 +622,23 @@ async def delete_character(character_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Character deleted successfully"}
 
+@app.put("/api/characters/{character_id}", response_model=Character)
+async def update_character(character_id: int, data: CharacterBase, db: Session = Depends(get_db)):
+    char = db.query(CharacterDB).filter(CharacterDB.id == character_id).first()
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    if data.name is not None:
+        char.name = data.name
+    if data.image_url is not None:
+        char.image_url = data.image_url
+    if hasattr(data, 'description') and data.description is not None:
+        char.description = data.description
+    
+    db.commit()
+    db.refresh(char)
+    return char
+
 # --- Locations CRUD ---
 @app.get("/api/projects/{project_id}/locations", response_model=list[Location])
 async def get_project_locations(project_id: int, db: Session = Depends(get_db)):
@@ -653,6 +670,23 @@ async def delete_location(location_id: int, db: Session = Depends(get_db)):
     db.delete(loc)
     db.commit()
     return {"message": "Location deleted successfully"}
+
+@app.put("/api/locations/{location_id}", response_model=Location)
+async def update_location(location_id: int, data: LocationBase, db: Session = Depends(get_db)):
+    loc = db.query(LocationDB).filter(LocationDB.id == location_id).first()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    if data.name is not None:
+        loc.name = data.name
+    if data.image_url is not None:
+        loc.image_url = data.image_url
+    if hasattr(data, 'description') and data.description is not None:
+        loc.description = data.description
+    
+    db.commit()
+    db.refresh(loc)
+    return loc
 
 # --- Scene-Character Association (Toggle) ---
 @app.post("/api/scenes/{scene_id}/characters/{character_id}")

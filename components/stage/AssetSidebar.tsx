@@ -4,9 +4,16 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from "@/store/useStore";
 import { useProject } from "@/store/ProjectContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, MapPin, Plus, User } from "lucide-react";
+import { Users, MapPin, Plus, User, MoreVertical, Pencil, Trash2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+    DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 // Types for assets
 interface Character {
@@ -122,15 +129,18 @@ export function AssetSidebar() {
     // Modal state
     const [modalOpen, setModalOpen] = useState(false);
     const [modalType, setModalType] = useState<"character" | "location">("character");
+    const [editingAsset, setEditingAsset] = useState<{ id: number; name: string; description?: string; image_url?: string | null } | null>(null);
 
     // Open modal for character creation
     const openCharacterModal = () => {
+        setEditingAsset(null); // Clear edit state
         setModalType("character");
         setModalOpen(true);
     };
 
     // Open modal for location creation
     const openLocationModal = () => {
+        setEditingAsset(null); // Clear edit state
         setModalType("location");
         setModalOpen(true);
     };
@@ -142,6 +152,58 @@ export function AssetSidebar() {
         } else {
             setLocations(prev => [...prev, asset]);
         }
+    };
+
+    // Handle asset updated
+    const handleAssetUpdated = (asset: any) => {
+        if (modalType === "character") {
+            setCharacters(prev => prev.map(c => c.id === asset.id ? asset : c));
+        } else {
+            setLocations(prev => prev.map(l => l.id === asset.id ? asset : l));
+        }
+    };
+
+    // Delete character
+    const deleteCharacter = async (charId: number, e: React.MouseEvent) => {
+        e.stopPropagation(); // Don't trigger toggle
+        if (!confirm("Supprimer ce personnage ?")) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/characters/${charId}`, { method: "DELETE" });
+            if (res.ok) {
+                setCharacters(prev => prev.filter(c => c.id !== charId));
+            }
+        } catch (e) {
+            console.error("Delete character failed", e);
+        }
+    };
+
+    // Delete location
+    const deleteLocation = async (locId: number, e: React.MouseEvent) => {
+        e.stopPropagation(); // Don't trigger toggle
+        if (!confirm("Supprimer ce lieu ?")) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/locations/${locId}`, { method: "DELETE" });
+            if (res.ok) {
+                setLocations(prev => prev.filter(l => l.id !== locId));
+            }
+        } catch (e) {
+            console.error("Delete location failed", e);
+        }
+    };
+
+    // Edit asset - open modal with pre-filled data
+    const editAsset = (asset: Character | Location, type: "character" | "location", e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingAsset({
+            id: asset.id,
+            name: asset.name,
+            description: (asset as any).description,
+            image_url: asset.image_url,
+        });
+        setModalType(type);
+        setModalOpen(true);
     };
 
     if (!currentProject || !activeSceneId) return null;
@@ -157,10 +219,15 @@ export function AssetSidebar() {
             <React.Suspense fallback={null}>
                 <AssetCreationModal
                     open={modalOpen}
-                    onClose={() => setModalOpen(false)}
+                    onClose={() => {
+                        setModalOpen(false);
+                        setEditingAsset(null);
+                    }}
                     type={modalType}
                     projectId={currentProject.id}
                     onCreated={handleAssetCreated}
+                    onUpdated={handleAssetUpdated}
+                    editAsset={editingAsset}
                 />
             </React.Suspense>
 
@@ -200,34 +267,65 @@ export function AssetSidebar() {
                                     {characters.map((char) => {
                                         const isLinked = displayCharacterIds.has(char.id);
                                         return (
-                                            <button
+                                            <div
                                                 key={char.id}
-                                                onClick={() => toggleCharacter(char.id)}
-                                                disabled={!activeSceneId}
                                                 className={cn(
-                                                    "flex flex-col items-center gap-2 p-2 rounded-lg transition-all",
-                                                    activeSceneId && "hover:bg-muted/50 cursor-pointer",
-                                                    !activeSceneId && "opacity-50 cursor-not-allowed",
+                                                    "relative flex flex-col items-center gap-2 p-2 rounded-lg transition-all",
+                                                    activeSceneId && "hover:bg-muted/50",
+                                                    !activeSceneId && "opacity-50",
                                                     isLinked && "ring-2 ring-primary bg-primary/10"
                                                 )}
-                                                title={char.name}
                                             >
-                                                {/* Avatar */}
-                                                <div className={cn(
-                                                    "h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold transition-all",
-                                                    char.image_url
-                                                        ? "bg-cover bg-center"
-                                                        : "bg-neutral-700",
-                                                    isLinked && "ring-2 ring-primary"
-                                                )}
-                                                    style={char.image_url ? { backgroundImage: `url(${char.image_url})` } : {}}
+                                                {/* Menu ⋮ */}
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <button
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="absolute top-1 right-1 p-1 rounded-full hover:bg-muted/80 opacity-60 hover:opacity-100 transition-opacity z-10"
+                                                        >
+                                                            <MoreVertical className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-40">
+                                                        <DropdownMenuItem onClick={(e) => editAsset(char, "character", e as any)}>
+                                                            <Pencil className="h-4 w-4 mr-2" />
+                                                            Modifier
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => deleteCharacter(char.id, e as any)}
+                                                            className="text-destructive focus:text-destructive"
+                                                        >
+                                                            <Trash2 className="h-4 w-4 mr-2" />
+                                                            Supprimer
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+
+                                                {/* Clickable area for toggle */}
+                                                <button
+                                                    onClick={() => toggleCharacter(char.id)}
+                                                    disabled={!activeSceneId}
+                                                    className="flex flex-col items-center gap-2 w-full cursor-pointer disabled:cursor-not-allowed"
+                                                    title={char.name}
                                                 >
-                                                    {!char.image_url && (
-                                                        <User className="h-5 w-5 text-neutral-400" />
+                                                    {/* Avatar */}
+                                                    <div className={cn(
+                                                        "h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold transition-all",
+                                                        char.image_url
+                                                            ? "bg-cover bg-center"
+                                                            : "bg-neutral-700",
+                                                        isLinked && "ring-2 ring-primary"
                                                     )}
-                                                </div>
-                                                <span className="text-xs text-center truncate w-full">{char.name}</span>
-                                            </button>
+                                                        style={char.image_url ? { backgroundImage: `url(${char.image_url})` } : {}}
+                                                    >
+                                                        {!char.image_url && (
+                                                            <User className="h-5 w-5 text-neutral-400" />
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs text-center truncate w-full">{char.name}</span>
+                                                </button>
+                                            </div>
                                         );
                                     })}
 
@@ -255,34 +353,65 @@ export function AssetSidebar() {
                                     {locations.map((loc) => {
                                         const isLinked = displayLocationId === loc.id;
                                         return (
-                                            <button
+                                            <div
                                                 key={loc.id}
-                                                onClick={() => toggleLocation(loc.id)}
-                                                disabled={!activeSceneId}
                                                 className={cn(
-                                                    "flex flex-col items-center gap-2 p-2 rounded-lg transition-all",
-                                                    activeSceneId && "hover:bg-muted/50 cursor-pointer",
-                                                    !activeSceneId && "opacity-50 cursor-not-allowed",
+                                                    "relative flex flex-col items-center gap-2 p-2 rounded-lg transition-all",
+                                                    activeSceneId && "hover:bg-muted/50",
+                                                    !activeSceneId && "opacity-50",
                                                     isLinked && "ring-2 ring-primary bg-primary/10"
                                                 )}
-                                                title={loc.name}
                                             >
-                                                {/* Thumbnail */}
-                                                <div className={cn(
-                                                    "h-16 w-full rounded-md flex items-center justify-center transition-all",
-                                                    loc.image_url
-                                                        ? "bg-cover bg-center"
-                                                        : "bg-neutral-700",
-                                                    isLinked && "ring-2 ring-primary"
-                                                )}
-                                                    style={loc.image_url ? { backgroundImage: `url(${loc.image_url})` } : {}}
+                                                {/* Menu ⋮ */}
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <button
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="absolute top-1 right-1 p-1 rounded-full hover:bg-muted/80 opacity-60 hover:opacity-100 transition-opacity z-10"
+                                                        >
+                                                            <MoreVertical className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-40">
+                                                        <DropdownMenuItem onClick={(e) => editAsset(loc, "location", e as any)}>
+                                                            <Pencil className="h-4 w-4 mr-2" />
+                                                            Modifier
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => deleteLocation(loc.id, e as any)}
+                                                            className="text-destructive focus:text-destructive"
+                                                        >
+                                                            <Trash2 className="h-4 w-4 mr-2" />
+                                                            Supprimer
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+
+                                                {/* Clickable area for toggle */}
+                                                <button
+                                                    onClick={() => toggleLocation(loc.id)}
+                                                    disabled={!activeSceneId}
+                                                    className="flex flex-col items-center gap-2 w-full cursor-pointer disabled:cursor-not-allowed"
+                                                    title={loc.name}
                                                 >
-                                                    {!loc.image_url && (
-                                                        <MapPin className="h-6 w-6 text-neutral-400" />
+                                                    {/* Thumbnail */}
+                                                    <div className={cn(
+                                                        "h-16 w-full rounded-md flex items-center justify-center transition-all",
+                                                        loc.image_url
+                                                            ? "bg-cover bg-center"
+                                                            : "bg-neutral-700",
+                                                        isLinked && "ring-2 ring-primary"
                                                     )}
-                                                </div>
-                                                <span className="text-xs text-center truncate w-full">{loc.name}</span>
-                                            </button>
+                                                        style={loc.image_url ? { backgroundImage: `url(${loc.image_url})` } : {}}
+                                                    >
+                                                        {!loc.image_url && (
+                                                            <MapPin className="h-6 w-6 text-neutral-400" />
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs text-center truncate w-full">{loc.name}</span>
+                                                </button>
+                                            </div>
                                         );
                                     })}
 

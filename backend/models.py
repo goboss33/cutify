@@ -132,6 +132,7 @@ class ProjectBase(BaseModel):
 # --- Asset Pydantic Schemas ---
 class CharacterBase(BaseModel):
     name: str
+    description: str | None = None
     image_url: str | None = None
 
 class Character(CharacterBase):
@@ -143,6 +144,7 @@ class Character(CharacterBase):
 
 class LocationBase(BaseModel):
     name: str
+    description: str | None = None
     image_url: str | None = None
 
 class Location(LocationBase):

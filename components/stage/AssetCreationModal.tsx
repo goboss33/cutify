@@ -18,12 +18,22 @@ import { cn } from "@/lib/utils";
 
 const API_BASE = "http://127.0.0.1:8000";
 
+// Asset type for editing
+interface EditableAsset {
+    id: number;
+    name: string;
+    description?: string;
+    image_url?: string | null;
+}
+
 interface AssetCreationModalProps {
     open: boolean;
     onClose: () => void;
     type: "character" | "location";
     projectId: number;
     onCreated: (asset: any) => void;
+    onUpdated?: (asset: any) => void;
+    editAsset?: EditableAsset | null; // If provided, we're in edit mode
 }
 
 export function AssetCreationModal({
@@ -32,6 +42,8 @@ export function AssetCreationModal({
     type,
     projectId,
     onCreated,
+    onUpdated,
+    editAsset,
 }: AssetCreationModalProps) {
     // Form state
     const [name, setName] = useState("");
@@ -46,18 +58,29 @@ export function AssetCreationModal({
     const [error, setError] = useState<string | null>(null);
 
     const isCharacter = type === "character";
+    const isEditMode = !!editAsset;
 
-    // Reset form when modal opens
+    // Reset form when modal opens, pre-fill if editing
     React.useEffect(() => {
         if (open) {
-            setName("");
-            setDescription("");
-            setTraits("");
-            setAmbiance("");
-            setGeneratedImageUrl(null);
+            if (editAsset) {
+                // Edit mode - pre-fill
+                setName(editAsset.name || "");
+                setDescription(editAsset.description || "");
+                setGeneratedImageUrl(editAsset.image_url || null);
+                setTraits("");
+                setAmbiance("");
+            } else {
+                // Create mode - reset
+                setName("");
+                setDescription("");
+                setTraits("");
+                setAmbiance("");
+                setGeneratedImageUrl(null);
+            }
             setError(null);
         }
-    }, [open]);
+    }, [open, editAsset]);
 
     // Generate image using Gemini
     const handleGenerateImage = async () => {
@@ -98,7 +121,7 @@ export function AssetCreationModal({
         }
     };
 
-    // Save asset
+    // Save asset (create or update)
     const handleSave = async () => {
         if (!name.trim()) {
             setError("Le nom est requis");
@@ -109,17 +132,30 @@ export function AssetCreationModal({
         setError(null);
 
         try {
-            const endpoint = isCharacter
-                ? `${API_BASE}/api/projects/${projectId}/characters`
-                : `${API_BASE}/api/projects/${projectId}/locations`;
+            let endpoint: string;
+            let method: string;
+
+            if (isEditMode && editAsset) {
+                // Update existing asset
+                endpoint = isCharacter
+                    ? `${API_BASE}/api/characters/${editAsset.id}`
+                    : `${API_BASE}/api/locations/${editAsset.id}`;
+                method = "PUT";
+            } else {
+                // Create new asset
+                endpoint = isCharacter
+                    ? `${API_BASE}/api/projects/${projectId}/characters`
+                    : `${API_BASE}/api/projects/${projectId}/locations`;
+                method = "POST";
+            }
 
             const response = await fetch(endpoint, {
-                method: "POST",
+                method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: name.trim(),
+                    description: description.trim(),
                     image_url: generatedImageUrl,
-                    // Extended fields could be stored in a JSON column if needed
                 }),
             });
 
@@ -127,8 +163,13 @@ export function AssetCreationModal({
                 throw new Error("Erreur lors de la sauvegarde");
             }
 
-            const newAsset = await response.json();
-            onCreated(newAsset);
+            const savedAsset = await response.json();
+
+            if (isEditMode && onUpdated) {
+                onUpdated(savedAsset);
+            } else {
+                onCreated(savedAsset);
+            }
             onClose();
         } catch (e) {
             console.error("Save failed", e);
@@ -146,19 +187,21 @@ export function AssetCreationModal({
                         {isCharacter ? (
                             <>
                                 <User className="h-5 w-5 text-primary" />
-                                Nouveau Personnage
+                                {isEditMode ? "Modifier le Personnage" : "Nouveau Personnage"}
                             </>
                         ) : (
                             <>
                                 <MapPin className="h-5 w-5 text-primary" />
-                                Nouveau Lieu
+                                {isEditMode ? "Modifier le Lieu" : "Nouveau Lieu"}
                             </>
                         )}
                     </DialogTitle>
                     <DialogDescription>
-                        {isCharacter
-                            ? "Créez un personnage pour votre projet"
-                            : "Ajoutez un lieu/décor pour vos scènes"}
+                        {isEditMode
+                            ? `Modifiez les informations de ${editAsset?.name || "cet asset"}`
+                            : isCharacter
+                                ? "Créez un personnage pour votre projet"
+                                : "Ajoutez un lieu/décor pour vos scènes"}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -283,7 +326,7 @@ export function AssetCreationModal({
                         ) : (
                             <Check className="h-4 w-4" />
                         )}
-                        Créer
+                        {isEditMode ? "Enregistrer" : "Créer"}
                     </Button>
                 </DialogFooter>
             </DialogContent>
