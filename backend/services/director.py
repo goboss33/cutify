@@ -24,7 +24,7 @@ image_model_name = 'gemini-2.0-flash-exp'
 # Actually, 'gemini-2.0-flash-exp' is the latest widely known. 'gemini-3-pro-image-preview' sounds like a very specific experimental tag.
 # I will use it.
 
-async def generate_storyboard(scene_script: str, project_context: dict) -> bytes:
+async def generate_storyboard(scene_script: str, project_context: dict, assets: list = []) -> bytes:
     """
     Generates a single 3x3 storyboard grid image using Gemini.
     Returns the image bytes.
@@ -33,6 +33,16 @@ async def generate_storyboard(scene_script: str, project_context: dict) -> bytes
     style = project_context.get('visual_style', 'Cinematic')
     genre = project_context.get('genre', 'General')
     
+    # Build asset context string
+    asset_context_str = ""
+    if assets:
+        asset_context_str = "<reference_assets>\nThe following images are provided as RIGID VISUAL REFERENCES. You MUST respect them for character and location consistency:\n"
+        for asset in assets:
+            type_label = asset.get('type', 'Asset').capitalize()
+            name = asset.get('name', 'Unknown')
+            asset_context_str += f"- {type_label}: {name}\n"
+        asset_context_str += "</reference_assets>\n"
+
     prompt = f"""
 <role>
 You are an award-winning trailer director + cinematographer + storyboard artist. Your job: turn ONE reference image concept into a cohesive cinematic short sequence, then output AI-video-ready keyframes.
@@ -41,13 +51,15 @@ You are an award-winning trailer director + cinematographer + storyboard artist.
 <input>
 Context: {style} / {genre}
 Scene Script: {scene_script}
+{asset_context_str}
 </input>
 
 <non-negotiable rules - continuity & truthfulness>
 1) First, analyze the full composition: identify ALL key subjects and describe spatial relationships.
-2) Strict continuity across ALL shots: same subjects, same wardrobe, same environment.
+2) Strict continuity across ALL shots: same subjects (MATCH PROVIDED REFERENCE IMAGES), same wardrobe, same environment.
 3) Depth of field must be realistic.
 4) Do NOT introduce new characters not present in the script.
+5) USE THE ATTACHED IMAGES AS THE SOURCE OF TRUTH for characters and locations.
 </non-negotiable rules - continuity & truthfulness>
 
 <goal>
@@ -86,23 +98,24 @@ Then, Generate the ONE Master Contact Sheet Image.
     """
     
     try:
-        # We need to use a model that supports proper image generation or experimental mode.
-        # Check if we should use `generate_content` or specific image method.
-        # For 'gemini-3-pro-image-preview', it's likely a GenerativeModel with tool use or native generation.
-        # We'll try the standard generate_content_async.
+        # Prepare content list (Prompt + Images)
+        contents = [prompt]
         
-        # Note: 'gemini-3-pro-image-preview' logic might require 'google-generativeai>=0.8.3' and specific call.
-        # If it's a text-to-image model, we might need:
-        # response = await model.generate_content_async(prompt)
-        
-        # Override model for this call
-        # WARNING: If the user doesn't have access, this throws.
-        # I'll use a try/except to fallback or report error.
+        # Load asset images
+        for asset in assets:
+            path = asset.get('image_path')
+            if path and os.path.exists(path):
+                try:
+                    img = Image.open(path)
+                    contents.append(img)
+                    print(f"Loaded reference image for {asset.get('name')}: {path}")
+                except Exception as e:
+                    print(f"Failed to load asset image {path}: {e}")
         
         # Use the specific experimental model requested by the user
         storyboard_model = genai.GenerativeModel('gemini-3-pro-image-preview') 
         
-        response = await storyboard_model.generate_content_async(prompt)
+        response = await storyboard_model.generate_content_async(contents)
         
         # Extract Image
         # Look for inline_data

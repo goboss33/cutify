@@ -496,12 +496,43 @@ async def generate_storyboard_endpoint(scene_id: int, db: Session = Depends(get_
         "visual_style": project.visual_style
     }
 
-    # 2. Generate Storyboard (Director Agent)
+    # 2. Gather Assets (Images)
+    assets = []
+    
+    # Location
+    if scene.location and scene.location.image_url:
+        path = scene.location.image_url
+        if path.startswith("/"):
+            path = path[1:] # Remove leading slash
+            
+        if os.path.exists(path):
+            assets.append({
+                "type": "location",
+                "name": scene.location.name,
+                "image_path": path
+            })
+            
+    # Characters
+    if scene.characters:
+        for char in scene.characters:
+            if char.image_url:
+                path = char.image_url
+                if path.startswith("/"):
+                    path = path[1:]
+                
+                if os.path.exists(path):
+                    assets.append({
+                        "type": "character",
+                        "name": char.name,
+                        "image_path": path
+                    })
+
+    # 3. Generate Storyboard (Director Agent)
     # Use script if available, else summary
     base_text = scene.script if scene.script else scene.summary
     
-    print(f"Generating storyboard for scene {scene_id}...")
-    master_image_bytes = await generate_storyboard(base_text, project_context)
+    print(f"Generating storyboard for scene {scene_id} with {len(assets)} reference assets...")
+    master_image_bytes = await generate_storyboard(base_text, project_context, assets)
     
     if not master_image_bytes:
         from fastapi import HTTPException
