@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCcw, Trash2, Terminal, Image as ImageIcon, MessageSquare, Code, FileJson } from "lucide-react";
+import { RefreshCcw, Trash2, Terminal, Image as ImageIcon, MessageSquare, Code, FileJson, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProject } from "@/store/ProjectContext";
 
 // Types matching backend/services/ai_logger.py
 interface AILog {
@@ -88,10 +90,20 @@ export function AIDebugConsole() {
     const scrollRef = useRef<HTMLDivElement>(null);
     const userHasSelectedRef = useRef(false); // Track if user manually selected a log
 
+    // Get current project from context
+    const { currentProject } = useProject();
+    const router = useRouter();
+
     const fetchLogs = async () => {
+        // Only fetch if a project is selected
+        if (!currentProject?.id) {
+            setLogs([]);
+            return;
+        }
+
         setIsLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/debug/ai-logs`);
+            const res = await fetch(`${API_BASE}/api/debug/ai-logs?project_id=${currentProject.id}`);
             if (res.ok) {
                 const data = await res.json();
                 setLogs(data);
@@ -108,8 +120,9 @@ export function AIDebugConsole() {
     };
 
     const clearLogs = async () => {
+        if (!currentProject?.id) return;
         try {
-            await fetch(`${API_BASE}/api/debug/ai-logs`, { method: "DELETE" });
+            await fetch(`${API_BASE}/api/debug/ai-logs?project_id=${currentProject.id}`, { method: "DELETE" });
             setLogs([]);
             setSelectedLogId(null);
         } catch (e) {
@@ -121,25 +134,55 @@ export function AIDebugConsole() {
         fetchLogs();
         const interval = setInterval(fetchLogs, 3000); // Polling every 3s
         return () => clearInterval(interval);
-    }, []);
+    }, [currentProject?.id]); // Re-fetch when project changes
 
     const selectedLog = logs.find(l => l.id === selectedLogId);
+
+    // Empty state when no project selected
+    if (!currentProject) {
+        return (
+            <div className="flex h-full w-full bg-background text-foreground items-center justify-center">
+                <div className="text-center space-y-4">
+                    <Terminal className="w-16 h-16 mx-auto text-muted-foreground/50" />
+                    <h2 className="text-2xl font-bold text-muted-foreground">Aucun projet sélectionné</h2>
+                    <p className="text-muted-foreground">Sélectionnez un projet pour voir les logs AI associés.</p>
+                    <Button onClick={() => router.push("/")} variant="outline">
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Retour aux projets
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-full w-full bg-background text-foreground overflow-hidden">
             {/* Sidebar List */}
             <div className="w-[350px] border-r border-border flex flex-col bg-muted/20">
-                <div className="p-4 border-b border-border flex items-center justify-between">
-                    <h2 className="font-bold flex items-center gap-2">
-                        <Terminal className="w-4 h-4" /> AI Console
-                    </h2>
-                    <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={fetchLogs} disabled={isLoading}>
-                            <RefreshCcw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={clearLogs}>
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
+                <div className="p-4 border-b border-border flex flex-col gap-2">
+                    {/* Back to project button */}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-fit -ml-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => router.push("/")}
+                    >
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Retour au projet
+                    </Button>
+                    <div className="flex items-center justify-between">
+                        <h2 className="font-bold flex items-center gap-2">
+                            <Terminal className="w-4 h-4" /> AI Console
+                            <Badge variant="outline" className="text-xs">{currentProject.title}</Badge>
+                        </h2>
+                        <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={fetchLogs} disabled={isLoading}>
+                                <RefreshCcw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={clearLogs}>
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
                 <ScrollArea className="flex-1">
