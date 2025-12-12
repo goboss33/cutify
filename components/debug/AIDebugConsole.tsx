@@ -86,6 +86,7 @@ export function AIDebugConsole() {
     const [isLoading, setIsLoading] = useState(false);
     const [promptViewMode, setPromptViewMode] = useState<"raw" | "payload">("payload");
     const scrollRef = useRef<HTMLDivElement>(null);
+    const userHasSelectedRef = useRef(false); // Track if user manually selected a log
 
     const fetchLogs = async () => {
         setIsLoading(true);
@@ -94,7 +95,8 @@ export function AIDebugConsole() {
             if (res.ok) {
                 const data = await res.json();
                 setLogs(data);
-                if (!selectedLogId && data.length > 0) {
+                // Only auto-select if user hasn't manually selected anything yet
+                if (!userHasSelectedRef.current && data.length > 0) {
                     setSelectedLogId(data[0].id);
                 }
             }
@@ -145,7 +147,10 @@ export function AIDebugConsole() {
                         {logs.map((log) => (
                             <button
                                 key={log.id}
-                                onClick={() => setSelectedLogId(log.id)}
+                                onClick={() => {
+                                    userHasSelectedRef.current = true;
+                                    setSelectedLogId(log.id);
+                                }}
                                 className={cn(
                                     "flex flex-col items-start p-3 rounded-lg text-left transition-colors border",
                                     selectedLogId === log.id
