@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { GenreSelector } from "@/components/dashboard/GenreSelector";
+import { VisualStyleSelector } from "@/components/dashboard/VisualStyleSelector";
+import { ALL_STYLES } from "@/lib/visualStyles";
 import {
     Select,
     SelectContent,
@@ -31,10 +33,7 @@ const TARGET_AUDIENCES = [
     "Professionals", "Tech Enthusiasts", "Gamers", "Lifestyle"
 ];
 
-const VISUAL_STYLES = [
-    "Cinematic", "Minimalist", "Vlog / Handheld", "Documentary",
-    "Animation / 3D", "Retro / Vintage", "Cyberpunk / Futuristic", "Corporate / Clean"
-];
+
 
 interface CreateProjectWizardProps {
     onCancel: () => void;
@@ -84,7 +83,7 @@ export function CreateProjectWizard({ onCancel, onProjectCreated }: CreateProjec
                     aspect_ratio: aspectRatio,
                     pitch,
                     target_audience: targetAudience,
-                    visual_style: visualStyle
+                    visual_style: ALL_STYLES.find(s => s.id === visualStyle)?.name || visualStyle
                 })
             });
 
@@ -269,15 +268,8 @@ export function CreateProjectWizard({ onCancel, onProjectCreated }: CreateProjec
                                     </div>
 
                                     <div className="space-y-3">
-                                        <label className="text-lg font-semibold">Visual Style</label>
-                                        <Select value={visualStyle} onValueChange={setVisualStyle}>
-                                            <SelectTrigger className="h-14 text-lg bg-muted/30 border-primary/20">
-                                                <SelectValue placeholder="Select a visual vibe..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {VISUAL_STYLES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
+                                        <label className="text-lg font-semibold">Style Visuel</label>
+                                        <VisualStyleSelector value={visualStyle} onChange={setVisualStyle} />
                                     </div>
                                 </div>
                             </div>
