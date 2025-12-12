@@ -184,7 +184,7 @@ export function CreateProjectDialog({ open, onOpenChange, onProjectCreated }: Cr
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-sm font-medium">Genre</label>
+                                        <label className="text-sm font-medium">Type de vidéo</label>
                                         <GenreSelector value={genre} onChange={setGenre} />
                                     </div>
                                     <div className="space-y-2">

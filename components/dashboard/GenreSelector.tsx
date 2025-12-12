@@ -42,15 +42,15 @@ export function GenreSelector({ value, onChange }: GenreSelectorProps) {
                 >
                     {value
                         ? value
-                        : "Select a genre..."}
+                        : "Sélectionnez un type..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0" align="start">
                 <Command>
-                    <CommandInput placeholder="Search genre..." />
+                    <CommandInput placeholder="Rechercher un type..." />
                     <CommandList>
-                        <CommandEmpty>No genre found.</CommandEmpty>
+                        <CommandEmpty>Aucun type trouvé.</CommandEmpty>
                         {GENRES.map((group) => (
                             <CommandGroup key={group.category} heading={group.category}>
                                 {group.items.map((genre) => (

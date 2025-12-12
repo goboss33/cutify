@@ -229,7 +229,7 @@ export function CreateProjectWizard({ onCancel, onProjectCreated }: CreateProjec
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-lg font-semibold">Genre</label>
+                                        <label className="text-lg font-semibold">Type de vidéo</label>
                                         <GenreSelector value={genre} onChange={setGenre} />
                                     </div>
                                     <div className="space-y-2">
