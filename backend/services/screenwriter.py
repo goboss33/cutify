@@ -21,6 +21,27 @@ async def generate_scenes_breakdown(project_data: dict) -> list[dict]:
                     {"title": str, "summary": str, "estimated_duration": str}
     """
     
+    # Template with placeholders for RAW view
+    prompt_template = """
+    You are an expert Screenwriter. Your job is to take a high-level video concept and break it down into a logical sequence of 5 to 8 distinct scenes.
+    
+    PROJECT TITLE: {{project_title}}
+    GENRE: {{project_genre}}
+    PITCH: {{project_pitch}}
+    VISUAL STYLE: {{project_visual_style}}
+    
+    Output STRICT JSON ONLY as a list of objects. Do not include markdown formatting like ```json ... ```.
+    Each object must have:
+    {{
+        "title": "string",
+        "summary": "string (approx 2 sentences describing the action)",
+        "estimated_duration": "string (e.g. '~30s')"
+    }}
+    
+    Do not include sequence_order, it will be added programmatically.
+    """
+    
+    # Interpolated prompt for actual API call
     prompt = f"""
     You are an expert Screenwriter. Your job is to take a high-level video concept and break it down into a logical sequence of 5 to 8 distinct scenes.
     
@@ -42,7 +63,8 @@ async def generate_scenes_breakdown(project_data: dict) -> list[dict]:
     
     log_id = AILogger.log_interaction(
         service="Screenwriter (Scenes)",
-        prompt=prompt
+        prompt=prompt,
+        prompt_template=prompt_template
     )
     
     try:
@@ -97,6 +119,53 @@ async def generate_scenes_with_assets(project_data: dict) -> dict:
         }
     """
     
+    # Template with placeholders for RAW view
+    prompt_template = """
+You are an expert Screenwriter and Production Designer. Your job is to:
+1. Break down a video concept into 5-8 distinct scenes
+2. Identify ALL characters in the story with their personality traits
+3. Identify ALL locations/settings in the story with their ambiance
+4. Map which characters and locations appear in each scene
+
+PROJECT TITLE: {{project_title}}
+GENRE: {{project_genre}}
+PITCH: {{project_pitch}}
+VISUAL STYLE: {{project_visual_style}}
+
+Output STRICT JSON ONLY (no markdown). The structure must be:
+{{
+    "scenes": [
+        {{
+            "title": "Scene title",
+            "summary": "2 sentences describing the action",
+            "estimated_duration": "~30s",
+            "character_names": ["Character Name 1", "Character Name 2"],
+            "location_name": "Location Name"
+        }}
+    ],
+    "characters": [
+        {{
+            "name": "Character Name",
+            "description": "Brief physical description (age, appearance, clothing)",
+            "traits": "Personality traits (e.g. brave, cunning, gentle, fierce)"
+        }}
+    ],
+    "locations": [
+        {{
+            "name": "Location Name",
+            "description": "Brief description of the place (key visual elements)",
+            "ambiance": "Mood and atmosphere (e.g. tense, peaceful, mysterious, vibrant)"
+        }}
+    ]
+}}
+
+IMPORTANT:
+- Character names and location names in scenes MUST match exactly those in the characters/locations arrays
+- Every character and location must appear in at least one scene
+- Be consistent with naming throughout
+"""
+    
+    # Interpolated prompt for actual API call
     prompt = f"""
 You are an expert Screenwriter and Production Designer. Your job is to:
 1. Break down a video concept into 5-8 distinct scenes
@@ -144,7 +213,8 @@ IMPORTANT:
     
     log_id = AILogger.log_interaction(
         service="Screenwriter (Scenes + Assets)",
-        prompt=prompt
+        prompt=prompt,
+        prompt_template=prompt_template
     )
     
     try:

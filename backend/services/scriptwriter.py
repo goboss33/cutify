@@ -20,6 +20,29 @@ async def generate_scene_script(scene_title: str, scene_summary: str, project_co
         str: The generated script content (Markdown formatted).
     """
     
+    # Template with placeholders for RAW view
+    prompt_template = """
+    You are an expert Screenwriter. Your job is to write a DETAILED SCRIPT for a specific scene in a video project.
+    
+    PROJECT CONTEXT:
+    Title: {{project_title}}
+    Genre: {{project_genre}}
+    Visual Style: {{project_visual_style}}
+    
+    SCENE TO WRITE:
+    Title: {{scene_title}}
+    Summary: {{scene_summary}}
+    
+    INSTRUCTIONS:
+    - Write a standard screenplay format script.
+    - Include Scene Heading (EXT/INT).
+    - Include Action Descriptions (Visuals).
+    - Include Dialogue (if applicable).
+    - Be creative and detailed.
+    - Return ONLY the script content.
+    """
+    
+    # Interpolated prompt for actual API call
     prompt = f"""
     You are an expert Screenwriter. Your job is to write a DETAILED SCRIPT for a specific scene in a video project.
     
@@ -43,7 +66,8 @@ async def generate_scene_script(scene_title: str, scene_summary: str, project_co
     
     log_id = AILogger.log_interaction(
         service="Scriptwriter",
-        prompt=prompt
+        prompt=prompt,
+        prompt_template=prompt_template
     )
     
     try:

@@ -8,13 +8,14 @@ LOG_BUFFER = deque(maxlen=50)
 
 class AILogger:
     @staticmethod
-    def log_interaction(service: str, prompt: str, images: list[str] = None, response: str = None, error: str = None):
+    def log_interaction(service: str, prompt: str, prompt_template: str = None, images: list[str] = None, response: str = None, error: str = None):
         """
         Logs an interaction with an AI model.
         
         Args:
             service: Name of the service (e.g., "Director", "AssetGenerator")
-            prompt: Reduced or full prompt text
+            prompt: The interpolated prompt text (with actual values)
+            prompt_template: The raw template with placeholders (e.g., "Title: {{title}}")
             images: List of image paths (served via static)
             response: The text response from the AI
             error: Error message if failed
@@ -24,6 +25,7 @@ class AILogger:
             "timestamp": time.time(),
             "service": service,
             "prompt": prompt,
+            "prompt_template": prompt_template,  # Raw template with {{placeholders}}
             "images": images or [],
             "response": response,
             "error": error,

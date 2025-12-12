@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCcw, Trash2, Terminal, Image as ImageIcon, MessageSquare } from "lucide-react";
+import { RefreshCcw, Trash2, Terminal, Image as ImageIcon, MessageSquare, Code, FileJson } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Types matching backend/services/ai_logger.py
@@ -13,6 +13,7 @@ interface AILog {
     timestamp: number;
     service: string;
     prompt: string;
+    prompt_template?: string;  // Raw template with {{placeholders}}
     images: string[];
     response_images?: string[];
     response?: string;
@@ -23,10 +24,67 @@ interface AILog {
 // API Helper (assuming API_BASE is globally available or we use relative path)
 const API_BASE = "http://localhost:8000";
 
+// Helper function to render prompt with highlighting
+// RAW mode: Shows template with {{placeholders}} highlighted in orange
+// PAYLOAD mode: Shows interpolated prompt with dynamic values highlighted in green
+function renderHighlightedPrompt(
+    promptPayload: string,
+    promptTemplate: string | undefined,
+    mode: "raw" | "payload"
+): React.ReactNode {
+
+    if (mode === "raw" && promptTemplate) {
+        // RAW MODE: Display template with {{placeholders}} highlighted in orange
+        const lines = promptTemplate.split('\n');
+        return lines.map((line, idx) => {
+            // Highlight {{placeholder}} patterns
+            const parts = line.split(/(\{\{[^}]+\}\})/g);
+            return (
+                <span key={idx}>
+                    {parts.map((part, partIdx) => {
+                        if (part.match(/^\{\{[^}]+\}\}$/)) {
+                            // This is a placeholder - highlight in orange
+                            return (
+                                <span key={partIdx} className="bg-orange-500/30 text-orange-400 px-1 rounded font-semibold">
+                                    {part}
+                                </span>
+                            );
+                        }
+                        return <span key={partIdx}>{part}</span>;
+                    })}
+                    {"\n"}
+                </span>
+            );
+        });
+    } else {
+        // PAYLOAD MODE: Display interpolated prompt with dynamic values highlighted
+        // We detect values by comparing with template or by matching known patterns
+        const lines = promptPayload.split('\n');
+        return lines.map((line, idx) => {
+            // Match pattern: LABEL: value (where value is dynamic data)
+            const match = line.match(/^(\s*)(PROJECT TITLE:|GENRE:|PITCH:|VISUAL STYLE:|Title:|Genre:|Visual Style:|User:)\s*(.*)$/i);
+
+            if (match) {
+                const [, indent, label, value] = match;
+                return (
+                    <span key={idx}>
+                        {indent}{label}{" "}
+                        {value && <span className="bg-green-500/30 text-green-400 px-1 rounded font-semibold">{value}</span>}
+                        {"\n"}
+                    </span>
+                );
+            }
+
+            return <span key={idx}>{line}{"\n"}</span>;
+        });
+    }
+}
+
 export function AIDebugConsole() {
     const [logs, setLogs] = useState<AILog[]>([]);
     const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [promptViewMode, setPromptViewMode] = useState<"raw" | "payload">("payload");
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const fetchLogs = async () => {
@@ -133,8 +191,37 @@ export function AIDebugConsole() {
                             <div className="space-y-8 max-w-4xl mx-auto pb-8">
                                 {/* PROMPT SECTION */}
                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-2 text-primary font-medium">
-                                        <MessageSquare className="w-4 h-4" /> USER (PROMPT)
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-primary font-medium">
+                                            <MessageSquare className="w-4 h-4" /> USER (PROMPT)
+                                        </div>
+                                        {/* RAW / PAYLOAD Toggle */}
+                                        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+                                            <button
+                                                onClick={() => setPromptViewMode("raw")}
+                                                className={cn(
+                                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                                                    promptViewMode === "raw"
+                                                        ? "bg-orange-500/20 text-orange-400 shadow-sm"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                )}
+                                            >
+                                                <Code className="w-3 h-3" />
+                                                RAW
+                                            </button>
+                                            <button
+                                                onClick={() => setPromptViewMode("payload")}
+                                                className={cn(
+                                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                                                    promptViewMode === "payload"
+                                                        ? "bg-green-500/20 text-green-400 shadow-sm"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                )}
+                                            >
+                                                <FileJson className="w-3 h-3" />
+                                                PAYLOAD
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Images (Reference) */}
@@ -156,11 +243,16 @@ export function AIDebugConsole() {
                                     )}
 
 
-                                    {/* Text Prompt */}
-                                    <Card className="bg-muted/30 border-primary/20">
+                                    {/* Text Prompt with Highlighting */}
+                                    <Card className={cn(
+                                        "border-l-4 transition-colors",
+                                        promptViewMode === "raw"
+                                            ? "bg-orange-500/5 border-l-orange-500/50"
+                                            : "bg-green-500/5 border-l-green-500/50"
+                                    )}>
                                         <CardContent className="p-4">
                                             <pre className="whitespace-pre-wrap font-mono text-sm text-muted-foreground leading-relaxed">
-                                                {selectedLog.prompt}
+                                                {renderHighlightedPrompt(selectedLog.prompt, selectedLog.prompt_template, promptViewMode)}
                                             </pre>
                                         </CardContent>
                                     </Card>

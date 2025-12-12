@@ -98,6 +98,38 @@ Then, Generate the ONE Master Contact Sheet Image.
 </final output format>
     """
     
+    # Template with placeholders for RAW view
+    prompt_template = """
+<role>
+You are an award-winning trailer director + cinematographer + storyboard artist. Your job: turn ONE reference image concept into a cohesive cinematic short sequence, then output AI-video-ready keyframes.
+</role>
+
+<input>
+Context: {{visual_style}} / {{genre}}
+Scene Script: {{scene_script}}
+{{asset_context}}
+</input>
+
+<non-negotiable rules - continuity & truthfulness>
+1) First, analyze the full composition: identify ALL key subjects and describe spatial relationships.
+2) Strict continuity across ALL shots: same subjects (MATCH PROVIDED REFERENCE IMAGES), same wardrobe, same environment.
+3) Depth of field must be realistic.
+4) Do NOT introduce new characters not present in the script.
+5) USE THE ATTACHED IMAGES AS THE SOURCE OF TRUTH for characters and locations.
+</non-negotiable rules - continuity & truthfulness>
+
+<goal>
+Expand the scene into a 9-panel cinematic storyboard (3x3 grid).
+</goal>
+
+(... steps 1-5 ...)
+
+<final output format>
+First, provide the text breakdown (Scene Breakdown, Story, Approach, KFs).
+Then, Generate the ONE Master Contact Sheet Image.
+</final output format>
+    """
+    
     log_id = None
     try:
         # Prepare content list (Prompt + Images)
@@ -122,6 +154,7 @@ Then, Generate the ONE Master Contact Sheet Image.
         log_id = AILogger.log_interaction(
             service="Director (Storyboard)",
             prompt=prompt,
+            prompt_template=prompt_template,
             images=image_paths
         )
         

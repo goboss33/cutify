@@ -18,6 +18,29 @@ async def generate_asset_image(prompt: str, asset_type: str, asset_name: str, st
 
     # Build a cinematic prompt
     if asset_type == "character":
+        # Template for RAW view
+        prompt_template = """
+Generate a specific character asset image based on the following requirements:
+
+Subject: {{asset_name}}
+Description: {{description}}
+Visual Style: {{visual_style}}
+
+COMPOSITION RULES:
+- Shot Type: Wide Shot (Full body shot). Ensure the character is fully visible from head to toe.
+- Environment: PURE WHITE STUDIO BACKGROUND. Infinite white void.
+- Lighting: Soft studio 3-point lighting, flat shading, no cast shadows.
+- Props: NONE. Subject stands on the invisible white floor.
+
+Requirements:
+- High quality character design
+- Professional concept art or film still aesthetic (matching the Visual Style)
+- 3:4 portrait aspect ratio
+- Focus solely on the character design
+- Sharp details, neutral pose appropriate for a character sheet.
+
+OUTPUT: Generate ONE high-quality full-body character image.
+"""
         full_prompt = f"""
 Generate a specific character asset image based on the following requirements:
 
@@ -41,6 +64,24 @@ Requirements:
 OUTPUT: Generate ONE high-quality full-body character image.
 """
     else:
+        # Template for RAW view
+        prompt_template = """
+Generate a cinematic location/scene image:
+
+Location: {{asset_name}}
+Description: {{description}}
+Visual Style: {{visual_style}}
+
+Requirements:
+- Cinematic wide shot or establishing shot
+- Professional film still aesthetic
+- Atmospheric lighting
+- Suitable for a movie location reference
+- 16:9 landscape aspect ratio
+- Match the requested Visual Style exactly.
+
+OUTPUT: Generate ONE high-quality environment image.
+"""
         full_prompt = f"""
 Generate a cinematic location/scene image:
 
@@ -70,7 +111,8 @@ OUTPUT: Generate ONE high-quality environment image.
         # Log Interaction
         log_id = AILogger.log_interaction(
             service=f"AssetGenerator ({asset_type})", 
-            prompt=full_prompt
+            prompt=full_prompt,
+            prompt_template=prompt_template
         )
         
         response = await model.generate_content_async(full_prompt)

@@ -35,11 +35,16 @@ async def extract_concept_from_chat(chat_history_str: str) -> dict:
     """
     Analyzes chat history and returns a structured JSON concept.
     """
+    # Template with placeholder for RAW view
+    prompt_template = f"{EXTRACTOR_SYSTEM_PROMPT}\n\nCHAT HISTORY:\n{{chat_history}}\n\nJSON OUTPUT:"
+    
+    # Interpolated prompt
     combined_prompt = f"{EXTRACTOR_SYSTEM_PROMPT}\n\nCHAT HISTORY:\n{chat_history_str}\n\nJSON OUTPUT:"
     
     log_id = AILogger.log_interaction(
         service="ConceptExtractor",
-        prompt=combined_prompt[:1000] + "..." if len(combined_prompt) > 1000 else combined_prompt
+        prompt=combined_prompt[:1000] + "..." if len(combined_prompt) > 1000 else combined_prompt,
+        prompt_template=prompt_template
     )
     
     try:

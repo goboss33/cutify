@@ -42,11 +42,15 @@ async def generate_showrunner_response(user_message: str, chat_history: list = [
     Generates a response using Gemini Pro with the Showrunner persona.
     Returns: (text_response, action_taken_flag)
     """
+    # Template with placeholder for RAW view
+    prompt_template = "User: {{user_message}}"
+    
     combined_prompt = f"{SHOWRUNNER_SYSTEM_PROMPT}\n\nUser: {user_message}"
     
     log_id = AILogger.log_interaction(
         service="Showrunner (Chat)",
-        prompt=f"User: {user_message}"
+        prompt=f"User: {user_message}",
+        prompt_template=prompt_template
     )
     
     try:
