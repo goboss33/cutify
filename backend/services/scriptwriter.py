@@ -1,5 +1,6 @@
 import google.generativeai as genai
 import os
+from services.ai_logger import AILogger
 
 # Configure Gemini
 GENAI_API_KEY = os.getenv("GENAI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -40,9 +41,23 @@ async def generate_scene_script(scene_title: str, scene_summary: str, project_co
     - Return ONLY the script content.
     """
     
+    log_id = AILogger.log_interaction(
+        service="Scriptwriter",
+        prompt=prompt
+    )
+    
     try:
         response = await model.generate_content_async(prompt)
+        AILogger.update_interaction(
+            log_id=log_id,
+            response=response.text[:500] + "..." if len(response.text) > 500 else response.text
+        )
         return response.text
     except Exception as e:
         print(f"Error in generate_scene_script: {e}")
+        AILogger.update_interaction(
+            log_id=log_id,
+            error=str(e)
+        )
         raise e
+

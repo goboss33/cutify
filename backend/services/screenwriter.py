@@ -1,6 +1,7 @@
 import google.generativeai as genai
 import os
 import json
+from services.ai_logger import AILogger
 
 # Configure Gemini
 GENAI_API_KEY = os.getenv("GENAI_API_KEY")
@@ -39,6 +40,11 @@ async def generate_scenes_breakdown(project_data: dict) -> list[dict]:
     Do not include sequence_order, it will be added programmatically.
     """
     
+    log_id = AILogger.log_interaction(
+        service="Screenwriter (Scenes)",
+        prompt=prompt
+    )
+    
     try:
         response = await model.generate_content_async(prompt)
         text_response = response.text
@@ -56,12 +62,20 @@ async def generate_scenes_breakdown(project_data: dict) -> list[dict]:
         
         if not isinstance(scenes_list, list):
             raise ValueError("AI response is not a list")
+        
+        AILogger.update_interaction(
+            log_id=log_id,
+            response=f"Generated {len(scenes_list)} scenes"
+        )
             
         return scenes_list
         
     except Exception as e:
         print(f"Error in generate_scenes_breakdown: {e}")
-        # Return a fallback or re-raise
+        AILogger.update_interaction(
+            log_id=log_id,
+            error=str(e)
+        )
         raise e
 
 
@@ -128,6 +142,11 @@ IMPORTANT:
 - Be consistent with naming throughout
 """
     
+    log_id = AILogger.log_interaction(
+        service="Screenwriter (Scenes + Assets)",
+        prompt=prompt
+    )
+    
     try:
         response = await model.generate_content_async(prompt)
         text_response = response.text
@@ -148,10 +167,19 @@ IMPORTANT:
             raise ValueError("AI response is not a dict")
         if "scenes" not in result or "characters" not in result or "locations" not in result:
             raise ValueError("Missing required keys in AI response")
+        
+        AILogger.update_interaction(
+            log_id=log_id,
+            response=f"Generated {len(result.get('scenes', []))} scenes, {len(result.get('characters', []))} characters, {len(result.get('locations', []))} locations"
+        )
             
         return result
         
     except Exception as e:
         print(f"Error in generate_scenes_with_assets: {e}")
+        AILogger.update_interaction(
+            log_id=log_id,
+            error=str(e)
+        )
         raise e
 

@@ -18,6 +18,7 @@ model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
 from sqlalchemy.orm import Session
 from services.tools import update_project_details, add_scene, delete_scene, reorder_scenes
+from services.ai_logger import AILogger
 
 SHOWRUNNER_SYSTEM_PROMPT = """You are the 'Showrunner Agent', a world-class video producer and creative director for the CUTIFY platform. 
 Your goal is to guide the user from an initial vague idea to a concrete video concept. 
@@ -41,6 +42,13 @@ async def generate_showrunner_response(user_message: str, chat_history: list = [
     Generates a response using Gemini Pro with the Showrunner persona.
     Returns: (text_response, action_taken_flag)
     """
+    combined_prompt = f"{SHOWRUNNER_SYSTEM_PROMPT}\n\nUser: {user_message}"
+    
+    log_id = AILogger.log_interaction(
+        service="Showrunner (Chat)",
+        prompt=f"User: {user_message}"
+    )
+    
     try:
         if not api_key:
              return "Error: GOOGLE_API_KEY not found. Please check backend/.env.", False
@@ -96,13 +104,22 @@ async def generate_showrunner_response(user_message: str, chat_history: list = [
             active_model = genai.GenerativeModel('gemini-2.0-flash-exp')
             chat = active_model.start_chat(history=chat_history)
         
-        combined_prompt = f"{SHOWRUNNER_SYSTEM_PROMPT}\n\nUser: {user_message}"
-        
         # Send message (SDK handles tool loop if enabled)
         response = await chat.send_message_async(combined_prompt)
+        
+        tools_used = "with tools" if action_taken_container["flag"] else "no tools"
+        AILogger.update_interaction(
+            log_id=log_id,
+            response=f"[{tools_used}] {response.text[:300]}..." if len(response.text) > 300 else f"[{tools_used}] {response.text}"
+        )
         
         return response.text, action_taken_container["flag"]
 
     except Exception as e:
         print(f"Error calling Gemini API: {e}")
+        AILogger.update_interaction(
+            log_id=log_id,
+            error=str(e)
+        )
         return f"I'm having trouble connecting to my creative brain right now. Error details: {str(e)}", False
+

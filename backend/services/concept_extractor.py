@@ -3,6 +3,7 @@ import json
 import google.generativeai as genai
 from dotenv import load_dotenv
 from pathlib import Path
+from services.ai_logger import AILogger
 
 # Load env variables (robust path loading)
 env_path = Path(__file__).resolve().parent.parent.parent / 'backend/.env'
@@ -34,15 +35,20 @@ async def extract_concept_from_chat(chat_history_str: str) -> dict:
     """
     Analyzes chat history and returns a structured JSON concept.
     """
+    combined_prompt = f"{EXTRACTOR_SYSTEM_PROMPT}\n\nCHAT HISTORY:\n{chat_history_str}\n\nJSON OUTPUT:"
+    
+    log_id = AILogger.log_interaction(
+        service="ConceptExtractor",
+        prompt=combined_prompt[:1000] + "..." if len(combined_prompt) > 1000 else combined_prompt
+    )
+    
     try:
         if not api_key:
-             return {"error": "GOOGLE_API_KEY not found."}
+            return {"error": "GOOGLE_API_KEY not found."}
 
-        combined_prompt = f"{EXTRACTOR_SYSTEM_PROMPT}\n\nCHAT HISTORY:\n{chat_history_str}\n\nJSON OUTPUT:"
-        
         # Check for empty history
         if not chat_history_str.strip() or len(chat_history_str) < 10:
-             return {
+            return {
                 "title": "New Project", 
                 "genre": "General", 
                 "pitch": "No concept discussed yet.", 
@@ -56,13 +62,24 @@ async def extract_concept_from_chat(chat_history_str: str) -> dict:
         # Parse JSON
         try:
             concept_data = json.loads(response.text)
+            AILogger.update_interaction(
+                log_id=log_id,
+                response=json.dumps(concept_data, ensure_ascii=False)
+            )
             return concept_data
         except json.JSONDecodeError:
-            # Fallback if model didn't output pure JSON despite prompt
-            # With response_mime_type="application/json", this is rare.
             print("Error parsing JSON from AI response")
+            AILogger.update_interaction(
+                log_id=log_id,
+                error="Failed to parse concept JSON"
+            )
             return {"error": "Failed to parse concept JSON", "raw": response.text}
             
     except Exception as e:
         print(f"Error calling Gemini API for extraction: {e}")
+        AILogger.update_interaction(
+            log_id=log_id,
+            error=str(e)
+        )
         return {"error": f"Extraction failed: {str(e)}"}
+
