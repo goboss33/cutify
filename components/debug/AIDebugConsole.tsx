@@ -118,8 +118,8 @@ export function AIDebugConsole() {
             {/* Main Content (Chat View) */}
             <div className="flex-1 flex flex-col h-full bg-background/50 backdrop-blur-3xl">
                 {selectedLog ? (
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        <div className="p-4 border-b border-border bg-background/80 backdrop-blur-md z-10 flex justify-between items-center">
+                    <div className="flex-1 flex flex-col min-h-0">
+                        <div className="p-4 border-b border-border bg-background/80 backdrop-blur-md z-10 flex justify-between items-center shrink-0">
                             <div>
                                 <h3 className="font-semibold text-lg">{selectedLog.service}</h3>
                                 <p className="text-xs text-muted-foreground">ID: {selectedLog.id}</p>
@@ -129,8 +129,8 @@ export function AIDebugConsole() {
                             </Badge>
                         </div>
 
-                        <ScrollArea className="flex-1 p-6">
-                            <div className="space-y-8 max-w-4xl mx-auto">
+                        <div className="flex-1 overflow-auto p-6">
+                            <div className="space-y-8 max-w-4xl mx-auto pb-8">
                                 {/* PROMPT SECTION */}
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-2 text-primary font-medium">
@@ -202,8 +202,8 @@ export function AIDebugConsole() {
                                     </Card>
                                 </div>
                             </div>
-                        </ScrollArea>
-                    </div >
+                        </div>
+                    </div>
                 ) : (
                     <div className="flex-1 flex items-center justify-center text-muted-foreground">
                         Select a log entry to view details
