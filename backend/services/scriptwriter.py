@@ -50,7 +50,7 @@ async def generate_scene_script(scene_title: str, scene_summary: str, project_co
         response = await model.generate_content_async(prompt)
         AILogger.update_interaction(
             log_id=log_id,
-            response=response.text[:500] + "..." if len(response.text) > 500 else response.text
+            response=response.text
         )
         return response.text
     except Exception as e:

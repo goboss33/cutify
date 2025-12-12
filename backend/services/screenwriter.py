@@ -65,7 +65,7 @@ async def generate_scenes_breakdown(project_data: dict) -> list[dict]:
         
         AILogger.update_interaction(
             log_id=log_id,
-            response=f"Generated {len(scenes_list)} scenes"
+            response=text_response
         )
             
         return scenes_list
@@ -170,7 +170,7 @@ IMPORTANT:
         
         AILogger.update_interaction(
             log_id=log_id,
-            response=f"Generated {len(result.get('scenes', []))} scenes, {len(result.get('characters', []))} characters, {len(result.get('locations', []))} locations"
+            response=text_response
         )
             
         return result

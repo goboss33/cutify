@@ -64,7 +64,7 @@ async def extract_concept_from_chat(chat_history_str: str) -> dict:
             concept_data = json.loads(response.text)
             AILogger.update_interaction(
                 log_id=log_id,
-                response=json.dumps(concept_data, ensure_ascii=False)
+                response=response.text
             )
             return concept_data
         except json.JSONDecodeError:

@@ -110,7 +110,7 @@ async def generate_showrunner_response(user_message: str, chat_history: list = [
         tools_used = "with tools" if action_taken_container["flag"] else "no tools"
         AILogger.update_interaction(
             log_id=log_id,
-            response=f"[{tools_used}] {response.text[:300]}..." if len(response.text) > 300 else f"[{tools_used}] {response.text}"
+            response=response.text
         )
         
         return response.text, action_taken_container["flag"]
