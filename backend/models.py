@@ -104,6 +104,25 @@ class ChatMessageDB(Base):
 
     project = relationship("ProjectDB", back_populates="chat_history")
 
+# --- AI Log Model (Persisted) ---
+class AILogDB(Base):
+    __tablename__ = "ai_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(String, unique=True, index=True, nullable=False)  # Unique ID for frontend
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)  # Optional project association
+    service = Column(String, nullable=False)  # e.g., "Director", "Screenwriter"
+    prompt = Column(Text, nullable=False)  # Interpolated prompt
+    prompt_template = Column(Text, nullable=True)  # Raw template with {{placeholders}}
+    images = Column(Text, nullable=True)  # JSON array of image paths
+    response = Column(Text, nullable=True)  # AI response text
+    response_images = Column(Text, nullable=True)  # JSON array of generated image paths
+    error = Column(Text, nullable=True)  # Error message if failed
+    status = Column(String, default="pending")  # pending, success, error
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("ProjectDB", backref="ai_logs")
+
 # --- Pydantic Schemas ---
 class ChatMessageInput(BaseModel):
     content: str

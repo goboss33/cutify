@@ -8,7 +8,7 @@ from services.ai_logger import AILogger
 GENAI_API_KEY = os.getenv("GENAI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=GENAI_API_KEY)
 
-async def generate_asset_image(prompt: str, asset_type: str, asset_name: str, style: str = "") -> str | None:
+async def generate_asset_image(prompt: str, asset_type: str, asset_name: str, style: str = "", project_id: int = None) -> str | None:
     """
     Generates an image for a character or location asset using Gemini.
     Returns the URL of the saved image.
@@ -112,7 +112,8 @@ OUTPUT: Generate ONE high-quality environment image.
         log_id = AILogger.log_interaction(
             service=f"AssetGenerator ({asset_type})", 
             prompt=full_prompt,
-            prompt_template=prompt_template
+            prompt_template=prompt_template,
+            project_id=project_id
         )
         
         response = await model.generate_content_async(full_prompt)

@@ -7,7 +7,7 @@ GENAI_API_KEY = os.getenv("GENAI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=GENAI_API_KEY)
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
-async def generate_scene_script(scene_title: str, scene_summary: str, project_context: dict) -> str:
+async def generate_scene_script(scene_title: str, scene_summary: str, project_context: dict, project_id: int = None) -> str:
     """
     Generates a detailed script for a specific scene.
     
@@ -67,7 +67,8 @@ async def generate_scene_script(scene_title: str, scene_summary: str, project_co
     log_id = AILogger.log_interaction(
         service="Scriptwriter",
         prompt=prompt,
-        prompt_template=prompt_template
+        prompt_template=prompt_template,
+        project_id=project_id
     )
     
     try:

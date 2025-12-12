@@ -31,7 +31,7 @@ The JSON schema must be:
 }
 If any field is missing information, infer it or use 'TBD'."""
 
-async def extract_concept_from_chat(chat_history_str: str) -> dict:
+async def extract_concept_from_chat(chat_history_str: str, project_id: int = None) -> dict:
     """
     Analyzes chat history and returns a structured JSON concept.
     """
@@ -44,7 +44,8 @@ async def extract_concept_from_chat(chat_history_str: str) -> dict:
     log_id = AILogger.log_interaction(
         service="ConceptExtractor",
         prompt=combined_prompt[:1000] + "..." if len(combined_prompt) > 1000 else combined_prompt,
-        prompt_template=prompt_template
+        prompt_template=prompt_template,
+        project_id=project_id
     )
     
     try:

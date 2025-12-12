@@ -376,7 +376,7 @@ async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db
         "visual_style": project.visual_style
     }
     
-    result = await generate_scenes_with_assets(project_data)
+    result = await generate_scenes_with_assets(project_data, project_id=project_id)
     
     # 3. Create Characters in DB
     character_map = {}  # name -> CharacterDB
@@ -471,7 +471,7 @@ async def generate_script_endpoint(scene_id: int, db: Session = Depends(get_db))
     }
     
     # 3. Call Scriptwriter AI
-    script_content = await generate_scene_script(scene.title, scene.summary, project_context)
+    script_content = await generate_scene_script(scene.title, scene.summary, project_context, project_id=project.id)
     
     # 4. Update DB
     scene.script = script_content
@@ -532,7 +532,7 @@ async def generate_storyboard_endpoint(scene_id: int, db: Session = Depends(get_
     base_text = scene.script if scene.script else scene.summary
     
     print(f"Generating storyboard for scene {scene_id} with {len(assets)} reference assets...")
-    master_image_bytes, log_id = await generate_storyboard(base_text, project_context, assets)
+    master_image_bytes, log_id = await generate_storyboard(base_text, project_context, assets, project_id=project.id)
     
     if not master_image_bytes:
         from fastapi import HTTPException
@@ -617,11 +617,12 @@ class GenerateAssetImageInput(BaseModel):
     type: str  # "character" or "location"
     name: str
     style: str | None = None
+    project_id: int | None = None
 
 @app.post("/api/generate-asset-image")
 async def generate_asset_image_endpoint(data: GenerateAssetImageInput):
     """Generate an image for a character or location using Gemini."""
-    image_url = await generate_asset_image(data.prompt, data.type, data.name, data.style)
+    image_url = await generate_asset_image(data.prompt, data.type, data.name, data.style, project_id=data.project_id)
     
     if not image_url:
         raise HTTPException(status_code=500, detail="Image generation failed")
@@ -812,12 +813,14 @@ async def unset_scene_location(scene_id: int, db: Session = Depends(get_db)):
 from services.ai_logger import AILogger
 
 @app.get("/api/debug/ai-logs")
-async def get_ai_logs():
-    return AILogger.get_logs()
+async def get_ai_logs(project_id: int = None, limit: int = 50):
+    """Get AI logs, optionally filtered by project_id."""
+    return AILogger.get_logs(project_id=project_id, limit=limit)
 
 @app.delete("/api/debug/ai-logs")
-async def clear_ai_logs():
-    AILogger.clear_logs()
+async def clear_ai_logs(project_id: int = None):
+    """Clear AI logs, optionally only for a specific project."""
+    AILogger.clear_logs(project_id=project_id)
     return {"status": "cleared"}
 
 @app.get("/")

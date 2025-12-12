@@ -50,7 +50,8 @@ async def generate_showrunner_response(user_message: str, chat_history: list = [
     log_id = AILogger.log_interaction(
         service="Showrunner (Chat)",
         prompt=f"User: {user_message}",
-        prompt_template=prompt_template
+        prompt_template=prompt_template,
+        project_id=project_id
     )
     
     try:

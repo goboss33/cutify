@@ -9,7 +9,7 @@ genai.configure(api_key=GENAI_API_KEY)
 # Using gemini-2.0-flash-exp as it is fast and capable
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
-async def generate_scenes_breakdown(project_data: dict) -> list[dict]:
+async def generate_scenes_breakdown(project_data: dict, project_id: int = None) -> list[dict]:
     """
     Uses Gemini to break down a project concept into a list of scenes.
     
@@ -64,7 +64,8 @@ async def generate_scenes_breakdown(project_data: dict) -> list[dict]:
     log_id = AILogger.log_interaction(
         service="Screenwriter (Scenes)",
         prompt=prompt,
-        prompt_template=prompt_template
+        prompt_template=prompt_template,
+        project_id=project_id
     )
     
     try:
@@ -101,7 +102,7 @@ async def generate_scenes_breakdown(project_data: dict) -> list[dict]:
         raise e
 
 
-async def generate_scenes_with_assets(project_data: dict) -> dict:
+async def generate_scenes_with_assets(project_data: dict, project_id: int = None) -> dict:
     """
     Uses Gemini to break down a project concept into scenes WITH characters and locations.
     Also determines which characters/locations appear in each scene.
@@ -214,7 +215,8 @@ IMPORTANT:
     log_id = AILogger.log_interaction(
         service="Screenwriter (Scenes + Assets)",
         prompt=prompt,
-        prompt_template=prompt_template
+        prompt_template=prompt_template,
+        project_id=project_id
     )
     
     try:

@@ -25,7 +25,7 @@ image_model_name = 'gemini-2.0-flash-exp'
 # Actually, 'gemini-2.0-flash-exp' is the latest widely known. 'gemini-3-pro-image-preview' sounds like a very specific experimental tag.
 # I will use it.
 
-async def generate_storyboard(scene_script: str | None, project_context: dict, assets: list = []) -> tuple[bytes | None, str | None]:
+async def generate_storyboard(scene_script: str | None, project_context: dict, assets: list = [], project_id: int = None) -> tuple[bytes | None, str | None]:
     """
     Generates a single 3x3 storyboard grid image using Gemini.
     Returns (image_bytes, log_id).
@@ -155,7 +155,8 @@ Then, Generate the ONE Master Contact Sheet Image.
             service="Director (Storyboard)",
             prompt=prompt,
             prompt_template=prompt_template,
-            images=image_paths
+            images=image_paths,
+            project_id=project_id
         )
         
         response = await storyboard_model.generate_content_async(contents)
