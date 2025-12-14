@@ -9,13 +9,12 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Slider } from "@/components/ui/slider"
-import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
     Film, ShoppingBag, GraduationCap, Share2, Music, Mic, Palette,
     Plus, Save, Search, ChevronLeft, GripVertical, Eye, AlertCircle, CheckCircle2,
-    Settings, FileText, Trash2, X, Layers, Users, MapPin, Box
+    Settings, FileText, Trash2, X, Layers, Users, MapPin, Box, Code
 } from "lucide-react"
 import Editor, { Monaco } from "@monaco-editor/react"
 import Link from "next/link"
@@ -305,6 +304,7 @@ function SettingsPanel({
     setTemplateDescription: (v: string) => void
     onAddSceneType: () => void
 }) {
+    const [showJson, setShowJson] = useState(false)
     const totalPercentage = sceneTypes.reduce((sum, s) => sum + s.percentage, 0)
     const isBalanced = totalPercentage === 100
 
@@ -445,6 +445,36 @@ function SettingsPanel({
                         ))}
                     </div>
                 </CardContent>
+            </Card>
+
+            {/* JSON View for Experts */}
+            <Card className="bg-white/5 border-white/10">
+                <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="text-white flex items-center gap-2">
+                            <Code className="h-5 w-5 text-purple-400" />
+                            JSON Expert Mode
+                        </CardTitle>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowJson(!showJson)}
+                            className={showJson ? "text-purple-400" : "text-white/60"}
+                        >
+                            {showJson ? "Hide" : "Show"}
+                        </Button>
+                    </div>
+                    <CardDescription className="text-white/50">
+                        View the raw JSON configuration
+                    </CardDescription>
+                </CardHeader>
+                {showJson && (
+                    <CardContent>
+                        <pre className="bg-black/40 rounded-lg p-4 overflow-auto max-h-96 text-sm font-mono text-white/80">
+                            {JSON.stringify(template.full_template, null, 2)}
+                        </pre>
+                    </CardContent>
+                )}
             </Card>
         </div>
     )
@@ -608,8 +638,8 @@ export default function TemplateEditorPage() {
             if (!updatedTemplate.prompts) updatedTemplate.prompts = {}
             const templatePrompts = updatedTemplate.prompts as Record<string, unknown>
             for (const key of Object.keys(prompts) as (keyof StoredPrompts)[]) {
-                if (!templatePrompts[key]) templatePrompts[key] = {}
-                    (templatePrompts[key] as Record<string, unknown>).custom_prompt = prompts[key]
+                if (!templatePrompts[key]) templatePrompts[key] = {};
+                (templatePrompts[key] as Record<string, unknown>).custom_prompt = prompts[key]
             }
 
             const res = await fetch(`http://127.0.0.1:8000/api/templates/${selectedTemplate.slug}`, {
