@@ -106,7 +106,8 @@ async def generate_scenes_with_assets(
     project_data: dict,
     project_id: int = None,
     onboarding_context: dict = None,
-    narrative_template: dict = None
+    narrative_template: dict = None,
+    casting_result: dict = None
 ) -> dict:
     """
     Uses Gemini to break down a project concept into scenes WITH characters and locations.
@@ -116,6 +117,7 @@ async def generate_scenes_with_assets(
         project_data (dict): Contains 'title', 'pitch', 'visual_style', etc.
         onboarding_context (dict): {detected_tags: [], ai_answers: {}}
         narrative_template (dict): {structure: [...], tone: str, pacing: str}
+        casting_result (dict): Result from run_casting_call with matched assets
         
     Returns:
         dict: {
@@ -140,6 +142,40 @@ async def generate_scenes_with_assets(
             enhanced_context += "\nINFOS COMPLÉMENTAIRES:"
             for q_id, answer in ai_answers.items():
                 enhanced_context += f"\n  - {answer}"
+    
+    # Add available assets from casting call (use best_cast for deduplication)
+    available_assets = ""
+    if casting_result:
+        # Use best_cast (deduplicated) if available, otherwise fall back to cast
+        cast = casting_result.get("best_cast", []) or casting_result.get("cast", [])
+        
+        if cast:
+            # Separate characters and locations
+            characters = [c for c in cast if c.get("role_id", "").startswith("char")]
+            locations = [c for c in cast if c.get("role_id", "").startswith("loc")]
+            
+            available_assets = "\n\n═══════════════════════════════════════════════════"
+            available_assets += "\nASSETS EXISTANTS À UTILISER (NOMS EXACTS):"
+            available_assets += "\n═══════════════════════════════════════════════════"
+            
+            if characters:
+                available_assets += "\n\n📌 PERSONNAGES:"
+                for c in characters:
+                    name = c.get("asset_name", "")
+                    conf = c.get("match_confidence", 0)
+                    available_assets += f"\n  - \"{name}\" (confiance: {conf:.0%})"
+            
+            if locations:
+                available_assets += "\n\n📍 LIEUX:"
+                for loc in locations:
+                    name = loc.get("asset_name", "")
+                    conf = loc.get("match_confidence", 0)
+                    available_assets += f"\n  - \"{name}\" (confiance: {conf:.0%})"
+            
+            available_assets += "\n\n⚠️ RÈGLES STRICTES:"
+            available_assets += "\n  - Tu DOIS utiliser ces NOMS EXACTS dans character_names et location_name"
+            available_assets += "\n  - NE PAS inventer de nouveaux personnages/lieux"
+            available_assets += "\n  - Le champ characters[] et locations[] doit reprendre ces noms exactement"
     
     # Add narrative template if available
     template_instructions = ""
@@ -215,6 +251,7 @@ GENRE: {project_data.get('genre')}
 PITCH: {project_data.get('pitch')}
 VISUAL STYLE: {project_data.get('visual_style')}
 {enhanced_context}
+{available_assets}
 {template_instructions}
 
 Output STRICT JSON ONLY (no markdown). The structure must be:

@@ -15,8 +15,10 @@ model = genai.GenerativeModel('gemini-2.0-flash-exp', generation_config={"respon
 
 async def run_casting_call(
     project_id: int,
+    title: str,
     pitch: str,
     category_slug: str,
+    visual_style: str,
     onboarding_context: dict,
     existing_assets: list
 ) -> dict:
@@ -25,63 +27,153 @@ async def run_casting_call(
     
     Returns:
         {
-            "narrative_roles": [...],   # All roles needed for the story
-            "cast": [...],             # Matched: {role, asset_id, asset_name}
-            "missing_roles": [...],    # Roles with no matching asset
-            "unused_assets": [...]     # Assets that don't fit the narrative
+            "narrative_roles": [...],
+            "cast": [...],
+            "missing_roles": [...],
+            "unused_assets": [...],
+            "best_cast": [...]  # Deduplicated: only best match per role
         }
     """
     
-    # Build asset list string
+    # Build asset list string with details
     assets_str = "Aucun asset existant"
     if existing_assets:
         assets_list = []
         for a in existing_assets:
-            asset_type = a.get("type", "unknown")
+            asset_type = a.get("type", "unknown").upper()
             name = a.get("name", "Unnamed")
-            desc = a.get("description", "")
-            assets_list.append(f"- [{asset_type}] {name}: {desc}")
+            desc = a.get("description", "") or "Pas de description"
+            asset_id = a.get("id", 0)
+            assets_list.append(f"- ID:{asset_id} [{asset_type}] \"{name}\": {desc}")
         assets_str = "\n".join(assets_list)
     
-    # Build context string
+    # Build context string from onboarding
     context_str = ""
     if onboarding_context:
         tags = onboarding_context.get("detected_tags", [])
         answers = onboarding_context.get("ai_answers", {})
         if tags:
-            context_str += f"\nTags détectés: {', '.join(tags)}"
+            context_str += f"\nMOTS-CLÉS DÉTECTÉS: {', '.join(tags)}"
         if answers:
-            context_str += f"\nRéponses onboarding: {json.dumps(answers, ensure_ascii=False)}"
+            context_str += "\nCONTEXTE ADDITIONNEL:"
+            for q_id, answer in answers.items():
+                context_str += f"\n  - {answer}"
     
-    prompt = f"""Tu es un directeur de casting pour la production vidéo. 
-Analyse le projet et détermine quels rôles narratifs sont nécessaires, puis fait correspondre les assets existants à ces rôles.
+    # Template with placeholders for RAW view
+    prompt_template = """Tu es le DIRECTEUR DE CASTING pour une production vidéo.
 
-CATÉGORIE: {category_slug}
-PITCH: "{pitch}"
-{context_str}
+═══════════════════════════════════════════════════
+PROJET: "{{title}}"
+CATÉGORIE: {{category_slug}}
+STYLE VISUEL: {{visual_style}}
+═══════════════════════════════════════════════════
 
-ASSETS EXISTANTS:
-{assets_str}
+PITCH:
+{{pitch}}
+{{context_str}}
 
-TÂCHE:
-1. Identifie les rôles narratifs nécessaires (personnages, lieux, objets clés)
-2. Pour chaque rôle, vérifie s'il y a un asset existant qui correspond
-3. Liste les rôles non couverts (à créer)
-4. Liste les assets qui ne correspondent à aucun rôle
+═══════════════════════════════════════════════════
+ASSETS EXISTANTS DANS LA BASE:
+═══════════════════════════════════════════════════
+{{assets_str}}
 
-Réponds UNIQUEMENT en JSON valide:
-{{
+═══════════════════════════════════════════════════
+TA MISSION:
+═══════════════════════════════════════════════════
+
+1. **ANALYSE** le titre et le pitch pour identifier les rôles narratifs nécessaires:
+   - Personnages (protagonistes, antagonistes, secondaires)
+   - Lieux (décors, environnements)
+   - Objets clés (accessoires importants)
+
+2. **CAST** les assets existants vers les rôles:
+   - Pour chaque rôle, choisis UN SEUL asset (le meilleur match)
+   - Évite les doublons: si "Corbeau" et "Crow" existent, choisis un seul
+   - match_confidence: 0.0 (aucun rapport) à 1.0 (correspondance parfaite)
+
+3. **LISTE** les rôles manquants (aucun asset ne correspond)
+
+4. **LISTE** les assets inutilisés
+
+RÈGLES IMPORTANTES:
+- UN asset par rôle maximum (pas de doublons)
+- Préfère les assets dans la langue du titre du projet
+- Si un asset a une description plus complète, préfère-le
+
+═══════════════════════════════════════════════════
+FORMAT DE RÉPONSE (JSON STRICT):
+═══════════════════════════════════════════════════
+{
   "narrative_roles": [
-    {{"id": "role_1", "type": "character|location|object", "name": "...", "description": "..."}}
+    {"id": "char_1", "type": "character", "name": "Nom", "description": "Description"}
   ],
   "cast": [
-    {{"role_id": "role_1", "asset_id": 123, "asset_name": "...", "match_confidence": 0.9}}
+    {"role_id": "char_1", "asset_id": 123, "asset_name": "Nom exact", "match_confidence": 0.95}
   ],
   "missing_roles": [
-    {{"id": "role_2", "type": "character", "name": "...", "description": "...", "suggested_prompt": "..."}}
+    {"id": "char_2", "type": "character", "name": "Nom", "description": "Description", "suggested_prompt": "Prompt style {{visual_style}}"}
   ],
   "unused_assets": [
-    {{"asset_id": 456, "asset_name": "...", "reason": "Ne correspond pas au pitch"}}
+    {"asset_id": 456, "asset_name": "Nom", "reason": "Pourquoi non utilisé"}
+  ]
+}"""
+
+    # Interpolated prompt for actual API call
+    prompt = f"""Tu es le DIRECTEUR DE CASTING pour une production vidéo.
+
+═══════════════════════════════════════════════════
+PROJET: "{title}"
+CATÉGORIE: {category_slug}
+STYLE VISUEL: {visual_style or "Non défini"}
+═══════════════════════════════════════════════════
+
+PITCH:
+{pitch}
+{context_str}
+
+═══════════════════════════════════════════════════
+ASSETS EXISTANTS DANS LA BASE:
+═══════════════════════════════════════════════════
+{assets_str}
+
+═══════════════════════════════════════════════════
+TA MISSION:
+═══════════════════════════════════════════════════
+
+1. **ANALYSE** le titre et le pitch pour identifier les rôles narratifs nécessaires:
+   - Personnages (protagonistes, antagonistes, secondaires)
+   - Lieux (décors, environnements)
+   - Objets clés (accessoires importants)
+
+2. **CAST** les assets existants vers les rôles:
+   - Pour chaque rôle, choisis UN SEUL asset (le meilleur match)
+   - Évite les doublons: si "Corbeau" et "Crow" existent, choisis un seul
+   - match_confidence: 0.0 (aucun rapport) à 1.0 (correspondance parfaite)
+
+3. **LISTE** les rôles manquants (aucun asset ne correspond)
+
+4. **LISTE** les assets inutilisés
+
+RÈGLES IMPORTANTES:
+- UN asset par rôle maximum (pas de doublons)
+- Préfère les assets dans la langue du titre du projet
+- Si un asset a une description plus complète, préfère-le
+
+═══════════════════════════════════════════════════
+FORMAT DE RÉPONSE (JSON STRICT):
+═══════════════════════════════════════════════════
+{{
+  "narrative_roles": [
+    {{"id": "char_1", "type": "character", "name": "Nom", "description": "Description"}}
+  ],
+  "cast": [
+    {{"role_id": "char_1", "asset_id": 123, "asset_name": "Nom exact", "match_confidence": 0.95}}
+  ],
+  "missing_roles": [
+    {{"id": "char_2", "type": "character", "name": "Nom", "description": "Description", "suggested_prompt": "Prompt style {visual_style or 'cinématique'}"}}
+  ],
+  "unused_assets": [
+    {{"asset_id": 456, "asset_name": "Nom", "reason": "Pourquoi non utilisé"}}
   ]
 }}"""
 
@@ -89,12 +181,16 @@ Réponds UNIQUEMENT en JSON valide:
         log_id = AILogger.log_interaction(
             service="CastingDirector",
             prompt=prompt,
+            prompt_template=prompt_template,
             project_id=project_id
         )
 
         response = await model.generate_content_async(prompt)
         result_text = response.text.strip()
         result = json.loads(result_text)
+        
+        # Post-process: deduplicate cast (keep only best match per role)
+        result["best_cast"] = deduplicate_cast(result.get("cast", []))
 
         AILogger.update_interaction(log_id, response=result_text)
         return result
@@ -104,10 +200,26 @@ Réponds UNIQUEMENT en JSON valide:
         return {
             "narrative_roles": [],
             "cast": [],
+            "best_cast": [],
             "missing_roles": [],
             "unused_assets": [],
             "error": str(e)
         }
+
+
+def deduplicate_cast(cast_list: list) -> list:
+    """
+    Keep only the best match (highest confidence) for each role.
+    """
+    best_by_role = {}
+    for item in cast_list:
+        role_id = item.get("role_id", "")
+        confidence = item.get("match_confidence", 0)
+        
+        if role_id not in best_by_role or confidence > best_by_role[role_id].get("match_confidence", 0):
+            best_by_role[role_id] = item
+    
+    return list(best_by_role.values())
 
 
 async def auto_create_missing_assets(project_id: int, missing_roles: list, db) -> list:
@@ -123,14 +235,14 @@ async def auto_create_missing_assets(project_id: int, missing_roles: list, db) -
         role_type = role.get("type", "character")
         name = role.get("name", "Unknown")
         description = role.get("description", "")
+        suggested_prompt = role.get("suggested_prompt", description)
         
         if role_type == "character":
             new_asset = CharacterDB(
                 project_id=project_id,
                 name=name,
-                description=description,
-                traits="",
-                visual_description=role.get("suggested_prompt", description)
+                description=f"{description}\n\nPrompt: {suggested_prompt}",
+                traits=""
             )
             db.add(new_asset)
             db.commit()
@@ -141,8 +253,7 @@ async def auto_create_missing_assets(project_id: int, missing_roles: list, db) -
             new_asset = LocationDB(
                 project_id=project_id,
                 name=name,
-                description=description,
-                visual_description=role.get("suggested_prompt", description)
+                description=f"{description}\n\nPrompt: {suggested_prompt}"
             )
             db.add(new_asset)
             db.commit()

@@ -412,83 +412,182 @@ async def create_simple_scene_endpoint(project_id: int, input_data: CreateSceneI
     db.refresh(new_scene)
     return new_scene
 
-from services.screenwriter import generate_scenes_with_assets
+# V4 Services imports
+from services.context_analyzer import analyze_context
+from services.scene_planner import plan_scenes
+from services.asset_reconciler import reconcile_assets, create_missing_assets
+from services.screenwriter_v4 import generate_scenes_v4
+from services.scene_validator import validate_generation
 
 @app.post("/api/projects/{project_id}/generate-scenes", response_model=list[Scene])
 async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db)):
+    """
+    V4 Pipeline: Context → Plan → Reconcile → Generate → Validate → Save
+    """
     # 1. Fetch Project
     project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
     if not project:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # 2. Call Screenwriter AI with assets extraction
-    project_data = {
-        "title": project.title,
-        "genre": project.genre,
-        "pitch": project.pitch,
-        "visual_style": project.visual_style
-    }
+    # 2. Parse onboarding context
+    onboarding_context = {}
+    if project.onboarding_context:
+        try:
+            onboarding_context = json_lib.loads(project.onboarding_context)
+        except:
+            pass
     
-    result = await generate_scenes_with_assets(project_data, project_id=project_id)
+    detected_tags = onboarding_context.get("detected_tags", [])
+    ai_answers = onboarding_context.get("ai_answers", {})
     
-    # 3. Create Characters in DB
-    character_map = {}  # name -> CharacterDB
-    for char_data in result.get("characters", []):
-        char_name = char_data.get("name", "")
-        if char_name and char_name not in character_map:
-            new_char = CharacterDB(
-                project_id=project.id,
-                name=char_name,
-                description=char_data.get("description", ""),
-                traits=char_data.get("traits", ""),
-                image_url=None  # Can be generated later
-            )
-            db.add(new_char)
-            db.flush()  # Get ID without committing
-            character_map[char_name] = new_char
+    # 3. Get preset info
+    preset_name = "general"
+    preset_visual_style = ""
+    preset_duration = 60
+    narrative_template = None
     
-    # 4. Create Locations in DB
-    location_map = {}  # name -> LocationDB
-    for loc_data in result.get("locations", []):
-        loc_name = loc_data.get("name", "")
-        if loc_name and loc_name not in location_map:
-            new_loc = LocationDB(
-                project_id=project.id,
-                name=loc_name,
-                description=loc_data.get("description", ""),
-                ambiance=loc_data.get("ambiance", ""),
-                image_url=None  # Can be generated later
-            )
-            db.add(new_loc)
-            db.flush()  # Get ID without committing
-            location_map[loc_name] = new_loc
+    if project.category_preset:
+        preset_name = project.category_preset.name or project.category_preset.slug
+        preset_visual_style = project.category_preset.default_visual_style or ""
+        preset_duration = project.category_preset.default_duration or 60
+        if project.category_preset.narrative_template:
+            try:
+                narrative_template = json_lib.loads(project.category_preset.narrative_template)
+            except:
+                pass
     
-    # 5. Create Scenes with associations
+    # Parse target duration from project (e.g., "60s" -> 60)
+    target_duration_seconds = 60
+    if project.target_duration:
+        try:
+            target_duration_seconds = int(project.target_duration.replace("s", "").strip())
+        except:
+            pass
+    
+    # ═══════════════════════════════════════════════════
+    # STEP 1: Context Analyzer
+    # ═══════════════════════════════════════════════════
+    context = await analyze_context(
+        project_id=project_id,
+        title=project.title or "Untitled",
+        pitch=project.pitch or "",
+        preset_name=preset_name,
+        preset_visual_style=preset_visual_style,
+        preset_duration=preset_duration,
+        detected_tags=detected_tags,
+        ai_answers=ai_answers,
+        target_duration_seconds=target_duration_seconds
+    )
+    
+    # ═══════════════════════════════════════════════════
+    # STEP 2: Scene Planner
+    # ═══════════════════════════════════════════════════
+    scene_plan = await plan_scenes(
+        project_id=project_id,
+        context=context,
+        narrative_template=narrative_template
+    )
+    
+    # ═══════════════════════════════════════════════════
+    # STEP 3: Asset Reconciler
+    # ═══════════════════════════════════════════════════
+    existing_assets = []
+    for char in project.characters:
+        existing_assets.append({
+            "id": char.id, 
+            "type": "character", 
+            "name": char.name, 
+            "description": char.description or ""
+        })
+    for loc in project.locations:
+        existing_assets.append({
+            "id": loc.id, 
+            "type": "location", 
+            "name": loc.name, 
+            "description": loc.description or ""
+        })
+    
+    asset_plan = await reconcile_assets(
+        project_id=project_id,
+        context=context,
+        existing_assets=existing_assets
+    )
+    
+    # Create missing assets (only those with action=CREATE)
+    asset_mapping = await create_missing_assets(project_id, asset_plan, db)
+    
+    # ═══════════════════════════════════════════════════
+    # STEP 4: Screenwriter V4
+    # ═══════════════════════════════════════════════════
+    result = await generate_scenes_v4(
+        project_id=project_id,
+        title=project.title or "Untitled",
+        pitch=project.pitch or "",
+        context=context,
+        scene_plan=scene_plan,
+        asset_mapping=asset_mapping
+    )
+    
+    scenes_data = result.get("scenes", [])
+    
+    # ═══════════════════════════════════════════════════
+    # STEP 5: Validator
+    # ═══════════════════════════════════════════════════
+    validation = validate_generation(
+        scenes=scenes_data,
+        context=context,
+        asset_mapping=asset_mapping,
+        scene_plan=scene_plan
+    )
+    
+    if not validation["valid"]:
+        print(f"Validation errors: {validation['errors']}")
+        # Continue anyway but log warnings
+    
+    if validation["warnings"]:
+        print(f"Validation warnings: {validation['warnings']}")
+    
+    # ═══════════════════════════════════════════════════
+    # STEP 6: Save to DB
+    # ═══════════════════════════════════════════════════
     new_scenes = []
-    for i, scene_item in enumerate(result.get("scenes", [])):
+    
+    # Build location map from existing + created
+    location_map = {}
+    for loc in project.locations:
+        location_map[loc.name.lower()] = loc
+    
+    # Build character map from existing + created
+    character_map = {}
+    for char in project.characters:
+        character_map[char.name.lower()] = char
+    
+    for i, scene_item in enumerate(scenes_data):
         # Get location for this scene
         scene_location_name = scene_item.get("location_name", "")
-        scene_location = location_map.get(scene_location_name)
+        scene_location = location_map.get(scene_location_name.lower())
+        
+        # Get duration
+        duration_seconds = scene_item.get("duration_seconds", 15)
+        estimated_duration = f"~{duration_seconds}s"
         
         new_scene = SceneDB(
             project_id=project.id,
-            sequence_order=i + 1,
+            sequence_order=scene_item.get("index", i + 1),
             title=scene_item.get("title", f"Scene {i+1}"),
             summary=scene_item.get("summary", ""),
-            estimated_duration=scene_item.get("estimated_duration", ""),
+            estimated_duration=estimated_duration,
             status="pending",
             location_id=scene_location.id if scene_location else None
         )
         db.add(new_scene)
-        db.flush()  # Get scene ID
+        db.flush()
         
-        # Associate characters to this scene
+        # Associate characters
         scene_char_names = scene_item.get("character_names", [])
         for char_name in scene_char_names:
-            char = character_map.get(char_name)
+            char = character_map.get(char_name.lower())
             if char:
-                # Insert into scene_characters association table
                 from sqlalchemy import insert
                 db.execute(
                     insert(scene_characters).values(
@@ -501,7 +600,6 @@ async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db
     
     db.commit()
     
-    # Refresh to get IDs and relations
     for s in new_scenes:
         db.refresh(s)
         
