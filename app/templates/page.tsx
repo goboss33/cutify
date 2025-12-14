@@ -64,6 +64,16 @@ interface StoredPrompts {
     screenwriter: string
 }
 
+// Helper function to replace {{variable}} with example values
+function interpolateVariables(content: string, variables: Variable[]): string {
+    let result = content
+    for (const v of variables) {
+        const regex = new RegExp(`\\{\\{${v.name}\\}\\}`, 'g')
+        result = result.replace(regex, v.example)
+    }
+    return result
+}
+
 // Default prompts
 const defaultPrompts: StoredPrompts = {
     context_analyzer: `Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.
@@ -208,13 +218,20 @@ function DraggableVariable({ variable, onClick }: { variable: Variable, onClick:
 function DroppableEditor({
     content,
     onChange,
-    editorRef
+    editorRef,
+    isPreview = false,
+    variables = []
 }: {
     content: string
     onChange: (value: string) => void
     editorRef: React.MutableRefObject<editor.IStandaloneCodeEditor | null>
+    isPreview?: boolean
+    variables?: Variable[]
 }) {
     const { setNodeRef, isOver } = useDroppable({ id: "editor-drop-zone" })
+
+    // In preview mode, replace {{variable}} with example values
+    const displayContent = isPreview ? interpolateVariables(content, variables) : content
 
     const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
         editorRef.current = editor
@@ -230,6 +247,7 @@ function DroppableEditor({
             }
         })
 
+        // Different theme for preview mode - green for interpolated values
         monaco.editor.defineTheme('prompt-theme', {
             base: 'vs-dark',
             inherit: true,
@@ -244,25 +262,48 @@ function DroppableEditor({
             }
         })
 
-        monaco.editor.setTheme('prompt-theme')
+        monaco.editor.defineTheme('prompt-theme-preview', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [
+                { token: 'variable', foreground: '22c55e', fontStyle: 'bold' },
+                { token: 'string', foreground: '22c55e' },
+                { token: 'number', foreground: '60a5fa' },
+            ],
+            colors: {
+                'editor.background': '#0a1a0d',
+                'editor.lineHighlightBackground': '#16a34a10',
+            }
+        })
+
+        monaco.editor.setTheme(isPreview ? 'prompt-theme-preview' : 'prompt-theme')
     }
 
     return (
         <div
             ref={setNodeRef}
-            className={`flex-1 overflow-hidden relative transition-all duration-200 ${isOver ? 'ring-2 ring-orange-500 ring-inset' : ''}`}
+            className={`flex-1 overflow-hidden relative transition-all duration-200 ${isOver && !isPreview ? 'ring-2 ring-orange-500 ring-inset' : ''}`}
         >
-            {isOver && (
+            {isOver && !isPreview && (
                 <div className="absolute inset-0 bg-orange-500/10 z-10 pointer-events-none flex items-center justify-center">
                     <span className="text-orange-400 text-lg font-semibold">Drop to insert variable</span>
                 </div>
             )}
+            {isPreview && (
+                <div className="absolute top-2 right-4 z-10">
+                    <Badge className="bg-green-600/80 text-white border-0">
+                        <Eye className="h-3 w-3 mr-1" />
+                        Preview Mode
+                    </Badge>
+                </div>
+            )}
             <Editor
+                key={isPreview ? 'preview' : 'edit'}
                 height="100%"
                 defaultLanguage="promptlang"
-                theme="prompt-theme"
-                value={content}
-                onChange={(value) => onChange(value || "")}
+                theme={isPreview ? "prompt-theme-preview" : "prompt-theme"}
+                value={displayContent}
+                onChange={(value) => !isPreview && onChange(value || "")}
                 onMount={handleEditorMount}
                 options={{
                     minimap: { enabled: false },
@@ -274,6 +315,8 @@ function DroppableEditor({
                     tabSize: 2,
                     wordWrap: "on",
                     padding: { top: 16 },
+                    readOnly: isPreview,
+                    domReadOnly: isPreview,
                 }}
             />
         </div>
@@ -833,14 +876,15 @@ export default function TemplateEditorPage() {
                                     </div>
 
                                     <div className="flex-1 flex overflow-hidden">
-                                        {/* Variable Palette */}
-                                        <div className="w-72 border-r border-white/10 bg-black/10 p-4 overflow-y-auto">
+                                        {/* Variable Palette - Grayed out in preview mode */}
+                                        <div className={`w-72 border-r border-white/10 bg-black/10 p-4 overflow-y-auto transition-opacity ${showPreview ? 'opacity-40 pointer-events-none' : ''}`}>
                                             <h3 className="text-sm font-semibold text-white/80 mb-3 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-orange-500" />
+                                                <span className={`w-2 h-2 rounded-full ${showPreview ? 'bg-gray-500' : 'bg-orange-500'}`} />
                                                 Variables
+                                                {showPreview && <span className="text-xs text-white/40 ml-auto">(disabled)</span>}
                                             </h3>
                                             <p className="text-xs text-white/40 mb-4">
-                                                Drag onto editor or click to insert
+                                                {showPreview ? 'Exit preview to edit' : 'Drag onto editor or click to insert'}
                                             </p>
                                             <div className="flex flex-wrap gap-2">
                                                 {currentVariables.map(v => (
@@ -851,23 +895,6 @@ export default function TemplateEditorPage() {
                                                     />
                                                 ))}
                                             </div>
-
-                                            {showPreview && (
-                                                <div className="mt-6 pt-4 border-t border-white/10">
-                                                    <h3 className="text-sm font-semibold text-white/80 mb-3 flex items-center gap-2">
-                                                        <span className="w-2 h-2 rounded-full bg-green-500" />
-                                                        Example Values
-                                                    </h3>
-                                                    <div className="space-y-2 text-xs">
-                                                        {currentVariables.map(v => (
-                                                            <div key={v.name} className="flex flex-col">
-                                                                <span className="text-orange-400 font-mono">{"{{" + v.name + "}}"}</span>
-                                                                <span className="text-green-400/80 pl-2">→ {v.example}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
 
                                         {/* Editor */}
@@ -875,6 +902,8 @@ export default function TemplateEditorPage() {
                                             content={currentPrompt}
                                             onChange={handlePromptChange}
                                             editorRef={editorRef}
+                                            isPreview={showPreview}
+                                            variables={currentVariables}
                                         />
                                     </div>
                                 </>
