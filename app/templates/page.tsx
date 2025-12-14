@@ -65,11 +65,13 @@ interface StoredPrompts {
 }
 
 // Helper function to replace {{variable}} with example values
+// Uses [[value]] markers in preview mode so Monaco can highlight them green
 function interpolateVariables(content: string, variables: Variable[]): string {
     let result = content
     for (const v of variables) {
         const regex = new RegExp(`\\{\\{${v.name}\\}\\}`, 'g')
-        result = result.replace(regex, v.example)
+        // Wrap with [[ ]] so Monaco tokenizer can detect and color them green
+        result = result.replace(regex, `[[${v.example}]]`)
     }
     return result
 }
@@ -237,42 +239,44 @@ function DroppableEditor({
         editorRef.current = editor
 
         monaco.languages.register({ id: 'promptlang' })
+
+        // Tokenizer: {{variable}} orange, [[interpolated]] green
         monaco.languages.setMonarchTokensProvider('promptlang', {
             tokenizer: {
                 root: [
-                    [/\{\{[^}]+\}\}/, 'variable'],
-                    [/"[^"]*"/, 'string'],
-                    [/\d+/, 'number'],
+                    [/\{\{[^}]+\}\}/, 'variable'],      // {{anything}} -> orange
+                    [/\[\[[^\]]+\]\]/, 'interpolated'], // [[anything]] -> green (preview)
                 ]
             }
         })
 
-        // Different theme for preview mode - green for interpolated values
+        // Edit mode: white text, orange variables
         monaco.editor.defineTheme('prompt-theme', {
             base: 'vs-dark',
             inherit: true,
             rules: [
                 { token: 'variable', foreground: 'f97316', fontStyle: 'bold' },
-                { token: 'string', foreground: '22c55e' },
-                { token: 'number', foreground: '60a5fa' },
+                { token: 'interpolated', foreground: '22c55e', fontStyle: 'bold' },
             ],
             colors: {
                 'editor.background': '#0c0a1d',
+                'editor.foreground': '#e2e8f0',  // White text
                 'editor.lineHighlightBackground': '#1e1b4b30',
             }
         })
 
+        // Preview mode: white text, green interpolated values
         monaco.editor.defineTheme('prompt-theme-preview', {
             base: 'vs-dark',
             inherit: true,
             rules: [
-                { token: 'variable', foreground: '22c55e', fontStyle: 'bold' },
-                { token: 'string', foreground: '22c55e' },
-                { token: 'number', foreground: '60a5fa' },
+                { token: 'variable', foreground: 'f97316', fontStyle: 'bold' },
+                { token: 'interpolated', foreground: '22c55e', fontStyle: 'bold' },
             ],
             colors: {
-                'editor.background': '#0a1a0d',
-                'editor.lineHighlightBackground': '#16a34a10',
+                'editor.background': '#0c0a1d',
+                'editor.foreground': '#e2e8f0',  // White text (same as edit mode)
+                'editor.lineHighlightBackground': '#1e1b4b30',
             }
         })
 
@@ -559,13 +563,14 @@ export default function TemplateEditorPage() {
             .catch(console.error)
     }, [])
 
-    // Load variables
+    // Load variables based on selected template type
     useEffect(() => {
-        fetch("http://127.0.0.1:8000/api/templates/variables/all")
+        const videoType = selectedTemplate?.slug || "cinematic"
+        fetch(`http://127.0.0.1:8000/api/templates/variables/${videoType}`)
             .then(res => res.json())
             .then(setVariables)
             .catch(console.error)
-    }, [])
+    }, [selectedTemplate?.slug])
 
     const loadFromTemplate = (template: Record<string, unknown>) => {
         // Load prompts

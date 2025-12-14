@@ -1067,46 +1067,145 @@ async def remove_template(slug: str):
         raise HTTPException(status_code=400, detail="Cannot delete protected template or template not found")
     return {"status": "deleted", "slug": slug}
 
-@app.get("/api/templates/variables/all")
-async def get_all_variables():
-    """Get all available variables for templates."""
+@app.get("/api/templates/variables/{video_type}")
+async def get_variables_for_type(video_type: str):
+    """Get variables with examples adapted to the video type."""
+    
+    # Examples per video type
+    examples = {
+        "cinematic": {
+            "title": "La Cigale et la Fourmi",
+            "pitch": "Une fable animée pour enfants racontant la célèbre histoire de La Fontaine",
+            "visual_style": "Ghibli + Cinematic",
+            "duration": "180",
+            "tone": "Conte moral et poétique",
+            "characters": "La Cigale, La Fourmi",
+            "locations": "Champ d'été, Fourmilière",
+            "tags_str": "Fable, Animation, Enfant",
+            "answers_str": "Public 6-10 ans, Leçon morale",
+            "narrative_arc": "fable",
+        },
+        "advertising": {
+            "title": "Lancement iPhone 16",
+            "pitch": "Spot publicitaire premium pour le nouveau smartphone Apple",
+            "visual_style": "Apple Minimal + Modern",
+            "duration": "30",
+            "tone": "Premium et aspirationnel",
+            "characters": "Utilisateur moderne",
+            "locations": "Studio blanc, Ville nocturne",
+            "tags_str": "Tech, Premium, Lifestyle",
+            "answers_str": "25-45 ans, CSP+",
+            "narrative_arc": "product_reveal",
+        },
+        "tutorial": {
+            "title": "Maîtriser Figma en 10 min",
+            "pitch": "Tutoriel complet pour débutants sur les bases de Figma",
+            "visual_style": "Clean + Educational",
+            "duration": "600",
+            "tone": "Pédagogique et clair",
+            "characters": "Présentateur",
+            "locations": "Screen capture, Interface Figma",
+            "tags_str": "Design, Tutorial, Figma",
+            "answers_str": "Débutants, Designers",
+            "narrative_arc": "educational",
+        },
+        "social_content": {
+            "title": "5 Astuces TikTok",
+            "pitch": "Contenu viral pour réseaux sociaux avec accroches percutantes",
+            "visual_style": "Trendy + Fast-paced",
+            "duration": "60",
+            "tone": "Fun et dynamique",
+            "characters": "Créateur de contenu",
+            "locations": "Studio coloré",
+            "tags_str": "Viral, Social, Tips",
+            "answers_str": "Gen Z, Engagement",
+            "narrative_arc": "hook_tension_payoff",
+        },
+        "music": {
+            "title": "Midnight Dreams",
+            "pitch": "Clip musical atmosphérique pour un artiste indie-pop",
+            "visual_style": "Neon Cyberpunk + Dreamy",
+            "duration": "240",
+            "tone": "Onirique et émotionnel",
+            "characters": "Artiste, Danseurs",
+            "locations": "Ville nocturne, Studio néon",
+            "tags_str": "Music, Indie, Visual",
+            "answers_str": "18-30 ans, Spotify",
+            "narrative_arc": "musical",
+        },
+        "podcast": {
+            "title": "Tech Weekly #42",
+            "pitch": "Épisode podcast sur les dernières actus IA et tech",
+            "visual_style": "Minimal + Professional",
+            "duration": "1800",
+            "tone": "Conversationnel et expert",
+            "characters": "Host, Invité expert",
+            "locations": "Studio podcast",
+            "tags_str": "Tech, IA, Discussion",
+            "answers_str": "Professionnels tech, 25-45",
+            "narrative_arc": "interview",
+        },
+        "motion_design": {
+            "title": "Brand Reveal Startup X",
+            "pitch": "Animation de logo et reveal de marque pour startup tech",
+            "visual_style": "Abstract + Geometric",
+            "duration": "15",
+            "tone": "Moderne et impactant",
+            "characters": "Logo animé",
+            "locations": "Fond abstrait, Particules",
+            "tags_str": "Branding, Motion, Logo",
+            "answers_str": "B2B, Investisseurs",
+            "narrative_arc": "reveal",
+        },
+    }
+    
+    # Get examples for this video type, fallback to cinematic
+    ex = examples.get(video_type, examples["cinematic"])
+    
     return {
         "context_analyzer": [
-            {"name": "title", "description": "Titre du projet", "example": "La Cigale et la Fourmi"},
-            {"name": "pitch", "description": "Description/pitch du projet", "example": "Un dessin animé pour enfants..."},
-            {"name": "visual_style", "description": "Style visuel demandé", "example": "Cinematic"},
-            {"name": "duration", "description": "Durée en secondes", "example": "180"},
-            {"name": "tags_str", "description": "Tags détectés", "example": "Fable, Enfant, Animation"},
-            {"name": "answers_str", "description": "Réponses utilisateur", "example": "Leçon morale, 10 ans"},
+            {"name": "title", "description": "Titre du projet", "example": ex["title"]},
+            {"name": "pitch", "description": "Description/pitch du projet", "example": ex["pitch"]},
+            {"name": "visual_style", "description": "Style visuel demandé", "example": ex["visual_style"]},
+            {"name": "duration", "description": "Durée en secondes", "example": ex["duration"]},
+            {"name": "tags_str", "description": "Tags détectés", "example": ex["tags_str"]},
+            {"name": "answers_str", "description": "Réponses utilisateur", "example": ex["answers_str"]},
+            {"name": "video_type", "description": "Type de vidéo", "example": video_type},
         ],
         "scene_planner": [
-            {"name": "visual_style", "description": "Style fusionné", "example": "Ghibli + Cinematic"},
-            {"name": "tone", "description": "Ton déduit", "example": "Conte moral"},
-            {"name": "target_duration", "description": "Durée cible", "example": "180"},
-            {"name": "suggested_count", "description": "Nombre de scènes suggéré", "example": "12"},
-            {"name": "characters", "description": "Personnages détectés", "example": "La Cigale, La Fourmi"},
-            {"name": "locations", "description": "Lieux détectés", "example": "Champ, Fourmilière"},
-            {"name": "narrative_arc", "description": "Type d'arc narratif", "example": "fable"},
+            {"name": "visual_style", "description": "Style fusionné", "example": ex["visual_style"]},
+            {"name": "tone", "description": "Ton déduit", "example": ex["tone"]},
+            {"name": "target_duration", "description": "Durée cible", "example": ex["duration"]},
+            {"name": "suggested_count", "description": "Nombre de scènes suggéré", "example": str(max(3, int(ex["duration"]) // 15))},
+            {"name": "characters", "description": "Personnages détectés", "example": ex["characters"]},
+            {"name": "locations", "description": "Lieux détectés", "example": ex["locations"]},
+            {"name": "narrative_arc", "description": "Type d'arc narratif", "example": ex["narrative_arc"]},
         ],
         "asset_reconciler": [
-            {"name": "visual_style", "description": "Style fusionné", "example": "Ghibli + Cinematic"},
-            {"name": "characters", "description": "Personnages à gérer", "example": "La Cigale, La Fourmi"},
-            {"name": "locations", "description": "Lieux à gérer", "example": "Champ, Fourmilière"},
-            {"name": "existing_assets", "description": "Assets existants formatés", "example": "ID:1 [character] \"La Cigale\""},
+            {"name": "visual_style", "description": "Style fusionné", "example": ex["visual_style"]},
+            {"name": "characters", "description": "Personnages à gérer", "example": ex["characters"]},
+            {"name": "locations", "description": "Lieux à gérer", "example": ex["locations"]},
+            {"name": "existing_assets", "description": "Assets existants", "example": f'ID:1 [character] "{ex["characters"].split(",")[0]}"'},
         ],
         "screenwriter": [
-            {"name": "title", "description": "Titre", "example": "La Cigale et la Fourmi"},
-            {"name": "pitch", "description": "Pitch", "example": "Un dessin animé..."},
-            {"name": "visual_style", "description": "Style fusionné", "example": "Ghibli + Cinematic"},
-            {"name": "tone", "description": "Ton", "example": "Conte moral"},
-            {"name": "target_duration", "description": "Durée cible", "example": "180"},
-            {"name": "scene_plan", "description": "Plan de scènes formaté", "example": "Scène 1: setup (15s)..."},
-            {"name": "characters", "description": "Personnages disponibles", "example": "La Cigale, La Fourmi"},
-            {"name": "locations", "description": "Lieux disponibles", "example": "Champ, Fourmilière"},
+            {"name": "title", "description": "Titre", "example": ex["title"]},
+            {"name": "pitch", "description": "Pitch", "example": ex["pitch"]},
+            {"name": "visual_style", "description": "Style fusionné", "example": ex["visual_style"]},
+            {"name": "tone", "description": "Ton", "example": ex["tone"]},
+            {"name": "target_duration", "description": "Durée cible", "example": ex["duration"]},
+            {"name": "scene_plan", "description": "Plan de scènes", "example": "Scène 1: opening (15s)..."},
+            {"name": "characters", "description": "Personnages", "example": ex["characters"]},
+            {"name": "locations", "description": "Lieux", "example": ex["locations"]},
         ]
     }
+
+@app.get("/api/templates/variables/all")
+async def get_all_variables():
+    """Get all available variables (default examples)."""
+    return await get_variables_for_type("cinematic")
 
 @app.get("/")
 async def root():
     return {"message": "Cutify Backend v0.8 - Template Editor"}
+
 
