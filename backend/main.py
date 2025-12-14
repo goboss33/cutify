@@ -253,6 +253,8 @@ class ProjectCreate(BaseModel):
     target_duration: str = "60s"
     aspect_ratio: str = "16:9"
     category_preset_id: int | None = None
+    detected_tags: list[str] = []
+    ai_answers: dict = {}
 
 @app.post("/api/projects", response_model=Project)
 async def create_project_endpoint(project_data: ProjectCreate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
@@ -275,6 +277,15 @@ async def create_project_endpoint(project_data: ProjectCreate, db: Session = Dep
         visual_style = visual_style or preset.default_visual_style
         genre = genre or preset.name  # Use preset name as genre if not provided
     
+    # Build onboarding context JSON
+    import json
+    onboarding_context = None
+    if project_data.detected_tags or project_data.ai_answers:
+        onboarding_context = json.dumps({
+            "detected_tags": project_data.detected_tags,
+            "ai_answers": project_data.ai_answers
+        })
+    
     new_project = ProjectDB(
         title=project_data.title,
         genre=genre,
@@ -287,6 +298,7 @@ async def create_project_endpoint(project_data: ProjectCreate, db: Session = Dep
         status="concept",
         user_id=user_id,
         category_preset_id=project_data.category_preset_id,
+        onboarding_context=onboarding_context,
         created_at=datetime.utcnow()
     )
     db.add(new_project)
@@ -866,6 +878,70 @@ async def analyze_pitch_endpoint(data: AnalyzePitchInput):
     result = await analyze_pitch(data.pitch, data.category_slug)
     return result
 
+# ========================================
+# CASTING CALL ENDPOINT
+# ========================================
+from services.casting_director import run_casting_call, auto_create_missing_assets
+import json as json_lib
+
+@app.post("/api/projects/{project_id}/casting-call")
+async def casting_call_endpoint(
+    project_id: int,
+    auto_create: bool = False,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    """Run casting call to match assets to narrative roles."""
+    # Get project
+    project = db.query(ProjectDB).filter(ProjectDB.id == project_id, ProjectDB.user_id == user_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Get category slug
+    category_slug = "general"
+    if project.category_preset:
+        category_slug = project.category_preset.slug
+    
+    # Parse onboarding context
+    onboarding_context = {}
+    if project.onboarding_context:
+        try:
+            onboarding_context = json_lib.loads(project.onboarding_context)
+        except:
+            pass
+    
+    # Get existing assets
+    existing_assets = []
+    for char in project.characters:
+        existing_assets.append({
+            "id": char.id,
+            "type": "character",
+            "name": char.name,
+            "description": char.description or ""
+        })
+    for loc in project.locations:
+        existing_assets.append({
+            "id": loc.id,
+            "type": "location", 
+            "name": loc.name,
+            "description": loc.description or ""
+        })
+    
+    # Run casting call
+    result = await run_casting_call(
+        project_id=project_id,
+        pitch=project.pitch or "",
+        category_slug=category_slug,
+        onboarding_context=onboarding_context,
+        existing_assets=existing_assets
+    )
+    
+    # Auto-create missing assets if requested
+    if auto_create and result.get("missing_roles"):
+        created = await auto_create_missing_assets(project_id, result["missing_roles"], db)
+        result["created_assets"] = created
+    
+    return result
 class GenerateQuestionsInput(BaseModel):
     pitch: str
     category_slug: str

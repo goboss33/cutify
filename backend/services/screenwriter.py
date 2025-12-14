@@ -102,13 +102,20 @@ async def generate_scenes_breakdown(project_data: dict, project_id: int = None) 
         raise e
 
 
-async def generate_scenes_with_assets(project_data: dict, project_id: int = None) -> dict:
+async def generate_scenes_with_assets(
+    project_data: dict,
+    project_id: int = None,
+    onboarding_context: dict = None,
+    narrative_template: dict = None
+) -> dict:
     """
     Uses Gemini to break down a project concept into scenes WITH characters and locations.
     Also determines which characters/locations appear in each scene.
     
     Args:
         project_data (dict): Contains 'title', 'pitch', 'visual_style', etc.
+        onboarding_context (dict): {detected_tags: [], ai_answers: {}}
+        narrative_template (dict): {structure: [...], tone: str, pacing: str}
         
     Returns:
         dict: {
@@ -119,6 +126,35 @@ async def generate_scenes_with_assets(project_data: dict, project_id: int = None
             "scene_location_map": {scene_index: location_index}
         }
     """
+    
+    # Build enhanced context
+    enhanced_context = ""
+    
+    # Add onboarding context if available
+    if onboarding_context:
+        tags = onboarding_context.get("detected_tags", [])
+        ai_answers = onboarding_context.get("ai_answers", {})
+        if tags:
+            enhanced_context += f"\nTAGS IMPORTANTS: {', '.join(tags)}"
+        if ai_answers:
+            enhanced_context += "\nINFOS COMPLÉMENTAIRES:"
+            for q_id, answer in ai_answers.items():
+                enhanced_context += f"\n  - {answer}"
+    
+    # Add narrative template if available
+    template_instructions = ""
+    if narrative_template:
+        structure = narrative_template.get("structure", [])
+        tone = narrative_template.get("tone", "")
+        pacing = narrative_template.get("pacing", "")
+        
+        if structure:
+            template_instructions = "\n\nSTRUCTURE NARRATIVE IMPOSÉE:"
+            for i, part in enumerate(structure):
+                template_instructions += f"\n  {i+1}. {part.get('type', 'scene').upper()} (~{part.get('duration', 10)}s): {part.get('description', '')}"
+            template_instructions += f"\n\nTON: {tone}"
+            template_instructions += f"\nRYTHME: {pacing}"
+            template_instructions += "\n\nIMPORTANT: Les scènes DOIVENT suivre cette structure narrative exacte."
     
     # Template with placeholders for RAW view
     prompt_template = """
@@ -169,7 +205,7 @@ IMPORTANT:
     # Interpolated prompt for actual API call
     prompt = f"""
 You are an expert Screenwriter and Production Designer. Your job is to:
-1. Break down a video concept into 5-8 distinct scenes
+1. Break down a video concept into distinct scenes
 2. Identify ALL characters in the story with their personality traits
 3. Identify ALL locations/settings in the story with their ambiance
 4. Map which characters and locations appear in each scene
@@ -178,6 +214,8 @@ PROJECT TITLE: {project_data.get('title')}
 GENRE: {project_data.get('genre')}
 PITCH: {project_data.get('pitch')}
 VISUAL STYLE: {project_data.get('visual_style')}
+{enhanced_context}
+{template_instructions}
 
 Output STRICT JSON ONLY (no markdown). The structure must be:
 {{

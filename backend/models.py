@@ -54,6 +54,7 @@ class ProjectDB(Base):
     status = Column(String, default="concept")
     user_id = Column(String, index=True, nullable=True) # ID from Supabase Auth
     category_preset_id = Column(Integer, ForeignKey("category_presets.id"), nullable=True)
+    onboarding_context = Column(Text, nullable=True)  # JSON: {detected_tags: [], ai_answers: {}}
     
     category_preset = relationship("CategoryPresetDB")
     scenes = relationship("SceneDB", back_populates="project", cascade="all, delete-orphan", order_by="SceneDB.sequence_order")

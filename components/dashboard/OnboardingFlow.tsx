@@ -157,7 +157,9 @@ export function OnboardingFlow({ preset, onBack, onProjectCreated }: OnboardingF
                     target_duration: durationStr,
                     aspect_ratio: aspectRatio,
                     pitch,
-                    category_preset_id: preset.id
+                    category_preset_id: preset.id,
+                    detected_tags: detectedTags,
+                    ai_answers: aiAnswers
                 })
             })
 
