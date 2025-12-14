@@ -1,21 +1,27 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { DndContext, DragEndEvent, useDraggable, useDroppable, DragOverlay } from "@dnd-kit/core"
+import { DndContext, DragEndEvent, useDraggable, useDroppable, closestCenter } from "@dnd-kit/core"
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Textarea } from "@/components/ui/textarea"
+import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
     Film, ShoppingBag, GraduationCap, Share2, Music, Mic, Palette,
-    Plus, Save, Search, ChevronLeft, GripVertical, Eye, AlertCircle, CheckCircle2
+    Plus, Save, Search, ChevronLeft, GripVertical, Eye, AlertCircle, CheckCircle2,
+    Settings, FileText, Trash2, X, Layers, Users, MapPin, Box
 } from "lucide-react"
 import Editor, { Monaco } from "@monaco-editor/react"
 import Link from "next/link"
 import type { editor } from "monaco-editor"
 
-// Icon mapping for templates
+// Icon mapping
 const iconMap: Record<string, React.ReactNode> = {
     cinematic: <Film className="h-4 w-4" />,
     advertising: <ShoppingBag className="h-4 w-4" />,
@@ -26,12 +32,10 @@ const iconMap: Record<string, React.ReactNode> = {
     motion_design: <Palette className="h-4 w-4" />,
 }
 
-// Tab to prompt key mapping
-const tabToPromptKey: Record<string, string> = {
-    context_analyzer: "context_analyzer",
-    scene_planner: "scene_planner",
-    asset_reconciler: "asset_reconciler",
-    screenwriter: "screenwriter"
+const assetTypeIcons: Record<string, React.ReactNode> = {
+    character: <Users className="h-4 w-4" />,
+    location: <MapPin className="h-4 w-4" />,
+    object: <Box className="h-4 w-4" />,
 }
 
 interface Template {
@@ -48,7 +52,12 @@ interface Variable {
     example: string
 }
 
-// Stored prompts for each step (editable text prompts)
+interface SceneType {
+    id: string
+    name: string
+    percentage: number
+}
+
 interface StoredPrompts {
     context_analyzer: string
     scene_planner: string
@@ -56,6 +65,7 @@ interface StoredPrompts {
     screenwriter: string
 }
 
+// Default prompts
 const defaultPrompts: StoredPrompts = {
     context_analyzer: `Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.
 
@@ -66,108 +76,104 @@ ENTRÉES:
 - Pitch: "{{pitch}}"
 - Style visuel demandé: "{{visual_style}}"
 - Durée cible: {{duration}} secondes
-- Tags détectés: {{tags_str}}
-- Réponses utilisateur: {{answers_str}}
-
-INSTRUCTIONS:
-1. Analyse le pitch pour extraire les personnages, lieux, ton, etc.
-2. Fusionne le style visuel (pitch + demandé)
-3. Calcule le nombre de scènes suggéré (durée / 15 secondes environ)
 
 RETOURNE CE JSON REMPLI:
 {
   "fused_visual_style": "...",
   "tone": "...",
-  "pacing": "...",
-  "language": "French",
   "target_duration_seconds": {{duration}},
-  "suggested_scene_count": ...,
-  "key_narrative_elements": ["...", "..."],
   "characters_detected": ["...", "..."],
-  "locations_detected": ["...", "..."],
-  "narrative_arc_type": "...",
-  "target_audience": "...",
-  "mood": "..."
+  "locations_detected": ["...", "..."]
 }`,
-    scene_planner: `Tu es un planificateur de scènes. Crée un plan de scènes pour cette vidéo.
+    scene_planner: `Tu es un planificateur de scènes. Crée un plan pour cette vidéo.
 
-TYPE DE VIDÉO: {{video_type}}
-
-CONTEXTE:
-- Style: {{visual_style}}
-- Ton: {{tone}}
-- Durée TOTALE: {{target_duration}} secondes
-- Nombre de scènes suggéré: {{suggested_count}}
-- Personnages: {{characters}}
-- Lieux: {{locations}}
-- Arc narratif: {{narrative_arc}}
-
-CONTRAINTES:
-- La somme de toutes les durées DOIT égaler EXACTEMENT {{target_duration}} secondes
-- Minimum 5s par scène, maximum 45s par scène
+Durée TOTALE: {{target_duration}} secondes
+Personnages: {{characters}}
+Lieux: {{locations}}
 
 RETOURNE CE JSON REMPLI:
 {
   "scene_plan": [
-    {"index": 1, "type": "setup", "title_suggestion": "...", "duration_seconds": 20, "purpose": "...", "key_action": "..."},
-    ...
+    {"index": 1, "type": "setup", "title_suggestion": "...", "duration_seconds": 20}
   ],
   "total_duration_seconds": {{target_duration}}
 }`,
-    asset_reconciler: `Tu es un gestionnaire d'assets. Identifie les personnages et lieux nécessaires.
-
-TYPE DE VIDÉO: {{video_type}}
-STYLE VISUEL: {{visual_style}}
+    asset_reconciler: `Tu es un gestionnaire d'assets. Identifie les personnages et lieux.
 
 PERSONNAGES DÉTECTÉS: {{characters}}
 LIEUX DÉTECTÉS: {{locations}}
 
-ASSETS EXISTANTS:
-{{existing_assets}}
-
-RÈGLES:
-- USE: si un asset existant correspond
-- CREATE: si l'asset n'existe pas
-- JAMAIS créer de doublon
-
-RETOURNE CE JSON REMPLI:
+RETOURNE CE JSON:
 {
-  "character_plan": [
-    {"role_name": "Nom", "action": "USE|CREATE", "create_prompt": "description si CREATE"}
-  ],
-  "location_plan": [
-    {"role_name": "Lieu", "action": "USE|CREATE", "create_prompt": "description si CREATE"}
-  ],
-  "object_plan": []
+  "character_plan": [...],
+  "location_plan": [...]
 }`,
-    screenwriter: `Tu es un scénariste. Écris les scènes détaillées pour cette vidéo.
+    screenwriter: `Tu es un scénariste. Écris les scènes détaillées.
 
-TYPE: {{video_type}}
 TITRE: "{{title}}"
-PITCH: "{{pitch}}"
-STYLE: {{visual_style}}
-TON: {{tone}}
-DURÉE TOTALE: {{target_duration}} secondes
+DURÉE: {{target_duration}} secondes
 
-PLAN DE SCÈNES À SUIVRE:
-{{scene_plan}}
-
-PERSONNAGES DISPONIBLES: {{characters}}
-LIEUX DISPONIBLES: {{locations}}
-
-CONTRAINTES:
-- Respecte les durées du plan
-- Écris en French
-- La somme des durées DOIT égaler {{target_duration}}s
-
-RETOURNE CE JSON REMPLI:
+RETOURNE CE JSON:
 {
-  "scenes": [
-    {"index": 1, "title": "...", "summary": "2-3 phrases", "duration_seconds": 20, "character_names": ["..."], "location_name": "..."},
-    ...
-  ],
-  "total_duration_seconds": {{target_duration}}
+  "scenes": [...]
 }`
+}
+
+// Sortable Scene Type Item
+function SortableSceneType({
+    scene,
+    onPercentageChange,
+    onRemove,
+    totalPercentage
+}: {
+    scene: SceneType
+    onPercentageChange: (id: string, value: number) => void
+    onRemove: (id: string) => void
+    totalPercentage: number
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: scene.id })
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    }
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`
+                flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10
+                ${isDragging ? 'opacity-50 z-50' : ''}
+            `}
+        >
+            <div {...attributes} {...listeners} className="cursor-grab text-white/40 hover:text-white/60">
+                <GripVertical className="h-4 w-4" />
+            </div>
+            <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-white">{scene.name}</span>
+                    <span className="text-sm text-purple-400 font-mono">{scene.percentage}%</span>
+                </div>
+                <Slider
+                    value={[scene.percentage]}
+                    onValueChange={([value]) => onPercentageChange(scene.id, value)}
+                    max={100}
+                    min={5}
+                    step={5}
+                    className="w-full"
+                />
+            </div>
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onRemove(scene.id)}
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            >
+                <X className="h-4 w-4" />
+            </Button>
+        </div>
+    )
 }
 
 // Draggable Variable Chip
@@ -203,12 +209,10 @@ function DraggableVariable({ variable, onClick }: { variable: Variable, onClick:
 function DroppableEditor({
     content,
     onChange,
-    onVariableInsert,
     editorRef
 }: {
     content: string
     onChange: (value: string) => void
-    onVariableInsert: (varName: string) => void
     editorRef: React.MutableRefObject<editor.IStandaloneCodeEditor | null>
 }) {
     const { setNodeRef, isOver } = useDroppable({ id: "editor-drop-zone" })
@@ -216,7 +220,6 @@ function DroppableEditor({
     const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
         editorRef.current = editor
 
-        // Register custom language tokens for variables
         monaco.languages.register({ id: 'promptlang' })
         monaco.languages.setMonarchTokensProvider('promptlang', {
             tokenizer: {
@@ -272,9 +275,177 @@ function DroppableEditor({
                     tabSize: 2,
                     wordWrap: "on",
                     padding: { top: 16 },
-                    renderWhitespace: "none",
                 }}
             />
+        </div>
+    )
+}
+
+// Settings Panel Component
+function SettingsPanel({
+    template,
+    sceneTypes,
+    setSceneTypes,
+    assetTypes,
+    setAssetTypes,
+    templateName,
+    setTemplateName,
+    templateDescription,
+    setTemplateDescription,
+    onAddSceneType
+}: {
+    template: Template
+    sceneTypes: SceneType[]
+    setSceneTypes: React.Dispatch<React.SetStateAction<SceneType[]>>
+    assetTypes: string[]
+    setAssetTypes: React.Dispatch<React.SetStateAction<string[]>>
+    templateName: string
+    setTemplateName: (v: string) => void
+    templateDescription: string
+    setTemplateDescription: (v: string) => void
+    onAddSceneType: () => void
+}) {
+    const totalPercentage = sceneTypes.reduce((sum, s) => sum + s.percentage, 0)
+    const isBalanced = totalPercentage === 100
+
+    const handlePercentageChange = (id: string, value: number) => {
+        setSceneTypes(prev => prev.map(s => s.id === id ? { ...s, percentage: value } : s))
+    }
+
+    const handleRemoveSceneType = (id: string) => {
+        setSceneTypes(prev => prev.filter(s => s.id !== id))
+    }
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event
+        if (over && active.id !== over.id) {
+            setSceneTypes(prev => {
+                const oldIndex = prev.findIndex(s => s.id === active.id)
+                const newIndex = prev.findIndex(s => s.id === over.id)
+                return arrayMove(prev, oldIndex, newIndex)
+            })
+        }
+    }
+
+    const toggleAssetType = (type: string) => {
+        setAssetTypes(prev =>
+            prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+        )
+    }
+
+    const availableAssetTypes = ["character", "location", "object", "text_overlay", "effect", "logo"]
+
+    return (
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Template Info */}
+            <Card className="bg-white/5 border-white/10">
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-white flex items-center gap-2">
+                        <Film className="h-5 w-5 text-purple-400" />
+                        Template Info
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label className="text-white/70">Name</Label>
+                        <Input
+                            value={templateName}
+                            onChange={(e) => setTemplateName(e.target.value)}
+                            className="bg-white/5 border-white/10 text-white"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-white/70">Description</Label>
+                        <Input
+                            value={templateDescription}
+                            onChange={(e) => setTemplateDescription(e.target.value)}
+                            className="bg-white/5 border-white/10 text-white"
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Scene Structure */}
+            <Card className="bg-white/5 border-white/10">
+                <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="text-white flex items-center gap-2">
+                            <Layers className="h-5 w-5 text-purple-400" />
+                            Scene Structure
+                        </CardTitle>
+                        <Badge
+                            variant="outline"
+                            className={isBalanced ? "border-green-500/50 text-green-400" : "border-yellow-500/50 text-yellow-400"}
+                        >
+                            {totalPercentage}% / 100%
+                        </Badge>
+                    </div>
+                    <CardDescription className="text-white/50">
+                        Drag to reorder • Adjust percentages to balance to 100%
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={sceneTypes.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                            {sceneTypes.map(scene => (
+                                <SortableSceneType
+                                    key={scene.id}
+                                    scene={scene}
+                                    onPercentageChange={handlePercentageChange}
+                                    onRemove={handleRemoveSceneType}
+                                    totalPercentage={totalPercentage}
+                                />
+                            ))}
+                        </SortableContext>
+                    </DndContext>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onAddSceneType}
+                        className="w-full border-dashed border-white/20 text-white/60 hover:text-white hover:border-white/40"
+                    >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Scene Type
+                    </Button>
+                </CardContent>
+            </Card>
+
+            {/* Asset Types */}
+            <Card className="bg-white/5 border-white/10">
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-white flex items-center gap-2">
+                        <Box className="h-5 w-5 text-purple-400" />
+                        Asset Types
+                    </CardTitle>
+                    <CardDescription className="text-white/50">
+                        Select which asset types are used in this video type
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-2 gap-3">
+                        {availableAssetTypes.map(type => (
+                            <button
+                                key={type}
+                                onClick={() => toggleAssetType(type)}
+                                className={`
+                                    flex items-center gap-3 p-3 rounded-lg border transition-all
+                                    ${assetTypes.includes(type)
+                                        ? 'bg-purple-600/20 border-purple-500/50 text-purple-300'
+                                        : 'bg-white/5 border-white/10 text-white/50 hover:text-white/70 hover:border-white/20'
+                                    }
+                                `}
+                            >
+                                {assetTypeIcons[type] || <Box className="h-4 w-4" />}
+                                <span className="capitalize">{type.replace('_', ' ')}</span>
+                                {assetTypes.includes(type) && (
+                                    <CheckCircle2 className="h-4 w-4 ml-auto" />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     )
 }
@@ -290,6 +461,13 @@ export default function TemplateEditorPage() {
     const [showPreview, setShowPreview] = useState(false)
     const [hasChanges, setHasChanges] = useState(false)
     const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle")
+    const [editorMode, setEditorMode] = useState<"prompts" | "settings">("prompts")
+
+    // Settings state
+    const [sceneTypes, setSceneTypes] = useState<SceneType[]>([])
+    const [assetTypes, setAssetTypes] = useState<string[]>([])
+    const [templateName, setTemplateName] = useState("")
+    const [templateDescription, setTemplateDescription] = useState("")
 
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
 
@@ -302,7 +480,7 @@ export default function TemplateEditorPage() {
                 if (data.length > 0 && !selectedTemplate) {
                     const first = data[0]
                     setSelectedTemplate(first)
-                    loadPromptsFromTemplate(first.full_template)
+                    loadFromTemplate(first.full_template)
                 }
             })
             .catch(console.error)
@@ -316,38 +494,57 @@ export default function TemplateEditorPage() {
             .catch(console.error)
     }, [])
 
-    // Extract prompts from template
-    const loadPromptsFromTemplate = (template: Record<string, unknown>) => {
+    const loadFromTemplate = (template: Record<string, unknown>) => {
+        // Load prompts
         const templatePrompts = template.prompts as Record<string, unknown> | undefined
+        const newPrompts = { ...defaultPrompts }
         if (templatePrompts) {
-            const newPrompts = { ...defaultPrompts }
-
-            // For each step, check if there's a custom_prompt field
             for (const key of Object.keys(defaultPrompts) as (keyof StoredPrompts)[]) {
                 const stepConfig = templatePrompts[key] as Record<string, unknown> | undefined
                 if (stepConfig?.custom_prompt && typeof stepConfig.custom_prompt === 'string') {
                     newPrompts[key] = stepConfig.custom_prompt
                 }
             }
-
-            setPrompts(newPrompts)
-        } else {
-            setPrompts(defaultPrompts)
         }
+        setPrompts(newPrompts)
+
+        // Load settings
+        setTemplateName(template.name as string || "")
+        setTemplateDescription(template.description as string || "")
+
+        // Load scene structure
+        const sceneStructure = template.scene_structure as Record<string, unknown> | undefined
+        if (sceneStructure) {
+            const types = sceneStructure.types as string[] || []
+            const distribution = sceneStructure.distribution as Record<string, number> || {}
+            setSceneTypes(types.map((type, i) => ({
+                id: `${type}-${i}`,
+                name: type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                percentage: Math.round((distribution[type] || 0.2) * 100)
+            })))
+        }
+
+        // Load asset types
+        const assets = template.asset_types as string[] | undefined
+        setAssetTypes(assets || ["character", "location"])
+
         setHasChanges(false)
     }
 
-    // When template changes, load its prompts
     useEffect(() => {
         if (selectedTemplate) {
-            loadPromptsFromTemplate(selectedTemplate.full_template)
+            loadFromTemplate(selectedTemplate.full_template)
         }
     }, [selectedTemplate])
 
-    const handlePromptChange = (value: string) => {
-        setPrompts(prev => ({ ...prev, [activeTab]: value }))
+    // Track changes
+    useEffect(() => {
         setHasChanges(true)
         setSaveStatus("idle")
+    }, [prompts, sceneTypes, assetTypes, templateName, templateDescription])
+
+    const handlePromptChange = (value: string) => {
+        setPrompts(prev => ({ ...prev, [activeTab]: value }))
     }
 
     const insertVariable = (varName: string) => {
@@ -355,7 +552,6 @@ export default function TemplateEditorPage() {
         if (editor) {
             const selection = editor.getSelection()
             const insertion = `{{${varName}}}`
-
             if (selection) {
                 editor.executeEdits("insert-variable", [{
                     range: selection,
@@ -369,10 +565,19 @@ export default function TemplateEditorPage() {
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event
-
         if (over?.id === "editor-drop-zone" && active.data.current?.variable) {
-            const varName = active.data.current.variable.name
-            insertVariable(varName)
+            insertVariable(active.data.current.variable.name)
+        }
+    }
+
+    const addSceneType = () => {
+        const newType = prompt("Enter scene type name (e.g., 'transition', 'montage'):")
+        if (newType) {
+            setSceneTypes(prev => [...prev, {
+                id: `${newType}-${Date.now()}`,
+                name: newType.replace(/\b\w/g, l => l.toUpperCase()),
+                percentage: 10
+            }])
         }
     }
 
@@ -382,22 +587,29 @@ export default function TemplateEditorPage() {
         setSaveStatus("idle")
 
         try {
-            // Build updated template with custom prompts
             const updatedTemplate = { ...selectedTemplate.full_template }
 
-            // Ensure prompts object exists
-            if (!updatedTemplate.prompts) {
-                updatedTemplate.prompts = {}
-            }
+            // Update metadata
+            updatedTemplate.name = templateName
+            updatedTemplate.description = templateDescription
 
+            // Update scene structure
+            const types = sceneTypes.map(s => s.name.toLowerCase().replace(' ', '_'))
+            const distribution: Record<string, number> = {}
+            sceneTypes.forEach(s => {
+                distribution[s.name.toLowerCase().replace(' ', '_')] = s.percentage / 100
+            })
+            updatedTemplate.scene_structure = { types, distribution }
+
+            // Update asset types
+            updatedTemplate.asset_types = assetTypes
+
+            // Update prompts
+            if (!updatedTemplate.prompts) updatedTemplate.prompts = {}
             const templatePrompts = updatedTemplate.prompts as Record<string, unknown>
-
-            // Save each prompt
             for (const key of Object.keys(prompts) as (keyof StoredPrompts)[]) {
-                if (!templatePrompts[key]) {
-                    templatePrompts[key] = {}
-                }
-                (templatePrompts[key] as Record<string, unknown>).custom_prompt = prompts[key]
+                if (!templatePrompts[key]) templatePrompts[key] = {}
+                    (templatePrompts[key] as Record<string, unknown>).custom_prompt = prompts[key]
             }
 
             const res = await fetch(`http://127.0.0.1:8000/api/templates/${selectedTemplate.slug}`, {
@@ -409,13 +621,8 @@ export default function TemplateEditorPage() {
             if (res.ok) {
                 setHasChanges(false)
                 setSaveStatus("success")
-
-                // Refresh templates
                 const updated = await fetch("http://127.0.0.1:8000/api/templates").then(r => r.json())
                 setTemplates(updated)
-                const refreshed = updated.find((t: Template) => t.slug === selectedTemplate.slug)
-                if (refreshed) setSelectedTemplate(refreshed)
-
                 setTimeout(() => setSaveStatus("idle"), 2000)
             } else {
                 setSaveStatus("error")
@@ -446,7 +653,7 @@ export default function TemplateEditorPage() {
                             <Link href="/ai-console" className="text-white/60 hover:text-white transition-colors">
                                 <ChevronLeft className="h-5 w-5" />
                             </Link>
-                            <h1 className="text-lg font-semibold text-white">Prompt Editor</h1>
+                            <h1 className="text-lg font-semibold text-white">Template Editor</h1>
                             {selectedTemplate && (
                                 <Badge variant="outline" className="border-purple-500/50 text-purple-400">
                                     {selectedTemplate.name}
@@ -454,20 +661,45 @@ export default function TemplateEditorPage() {
                             )}
                             {hasChanges && (
                                 <Badge variant="outline" className="border-yellow-500/50 text-yellow-400">
-                                    Unsaved changes
+                                    Unsaved
                                 </Badge>
                             )}
                         </div>
-                        <div className="flex items-center gap-3">
+
+                        {/* Mode Toggle */}
+                        <div className="flex items-center gap-2 bg-white/5 rounded-lg p-1">
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setShowPreview(!showPreview)}
-                                className={showPreview ? "text-green-400" : "text-white/60"}
+                                onClick={() => setEditorMode("prompts")}
+                                className={editorMode === "prompts" ? "bg-purple-600/30 text-purple-300" : "text-white/60"}
                             >
-                                <Eye className="h-4 w-4 mr-1" />
-                                Preview
+                                <FileText className="h-4 w-4 mr-1" />
+                                Prompts
                             </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditorMode("settings")}
+                                className={editorMode === "settings" ? "bg-purple-600/30 text-purple-300" : "text-white/60"}
+                            >
+                                <Settings className="h-4 w-4 mr-1" />
+                                Settings
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            {editorMode === "prompts" && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowPreview(!showPreview)}
+                                    className={showPreview ? "text-green-400" : "text-white/60"}
+                                >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    Preview
+                                </Button>
+                            )}
                             <Button
                                 size="sm"
                                 onClick={handleSave}
@@ -487,7 +719,7 @@ export default function TemplateEditorPage() {
                 </header>
 
                 <div className="flex h-[calc(100vh-3.5rem)]">
-                    {/* Sidebar - Template List */}
+                    {/* Sidebar */}
                     <aside className="w-64 border-r border-white/10 bg-black/20 flex flex-col">
                         <div className="p-3">
                             <div className="relative">
@@ -535,86 +767,88 @@ export default function TemplateEditorPage() {
                     {/* Main Content */}
                     <main className="flex-1 flex flex-col overflow-hidden">
                         {selectedTemplate ? (
-                            <>
-                                {/* Tabs */}
-                                <div className="border-b border-white/10 bg-black/10">
-                                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as keyof StoredPrompts)} className="w-full">
-                                        <TabsList className="h-12 bg-transparent border-0 px-4 justify-start gap-1">
-                                            <TabsTrigger
-                                                value="context_analyzer"
-                                                className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300"
-                                            >
-                                                Context Analyzer
-                                            </TabsTrigger>
-                                            <TabsTrigger
-                                                value="scene_planner"
-                                                className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300"
-                                            >
-                                                Scene Planner
-                                            </TabsTrigger>
-                                            <TabsTrigger
-                                                value="asset_reconciler"
-                                                className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300"
-                                            >
-                                                Asset Reconciler
-                                            </TabsTrigger>
-                                            <TabsTrigger
-                                                value="screenwriter"
-                                                className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300"
-                                            >
-                                                Screenwriter
-                                            </TabsTrigger>
-                                        </TabsList>
-                                    </Tabs>
-                                </div>
-
-                                <div className="flex-1 flex overflow-hidden">
-                                    {/* Variable Palette */}
-                                    <div className="w-72 border-r border-white/10 bg-black/10 p-4 overflow-y-auto">
-                                        <h3 className="text-sm font-semibold text-white/80 mb-3 flex items-center gap-2">
-                                            <span className="w-2 h-2 rounded-full bg-orange-500" />
-                                            Variables
-                                        </h3>
-                                        <p className="text-xs text-white/40 mb-4">
-                                            Drag onto editor or click to insert
-                                        </p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {currentVariables.map(v => (
-                                                <DraggableVariable
-                                                    key={v.name}
-                                                    variable={v}
-                                                    onClick={() => insertVariable(v.name)}
-                                                />
-                                            ))}
-                                        </div>
-
-                                        {showPreview && (
-                                            <div className="mt-6 pt-4 border-t border-white/10">
-                                                <h3 className="text-sm font-semibold text-white/80 mb-3 flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                                                    Example Values
-                                                </h3>
-                                                <div className="space-y-2 text-xs">
-                                                    {currentVariables.map(v => (
-                                                        <div key={v.name} className="flex flex-col">
-                                                            <span className="text-orange-400 font-mono">{"{{" + v.name + "}}"}</span>
-                                                            <span className="text-green-400/80 pl-2">→ {v.example}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                            editorMode === "settings" ? (
+                                <SettingsPanel
+                                    template={selectedTemplate}
+                                    sceneTypes={sceneTypes}
+                                    setSceneTypes={setSceneTypes}
+                                    assetTypes={assetTypes}
+                                    setAssetTypes={setAssetTypes}
+                                    templateName={templateName}
+                                    setTemplateName={setTemplateName}
+                                    templateDescription={templateDescription}
+                                    setTemplateDescription={setTemplateDescription}
+                                    onAddSceneType={addSceneType}
+                                />
+                            ) : (
+                                <>
+                                    {/* Tabs */}
+                                    <div className="border-b border-white/10 bg-black/10">
+                                        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as keyof StoredPrompts)} className="w-full">
+                                            <TabsList className="h-12 bg-transparent border-0 px-4 justify-start gap-1">
+                                                <TabsTrigger value="context_analyzer" className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300">
+                                                    Context Analyzer
+                                                </TabsTrigger>
+                                                <TabsTrigger value="scene_planner" className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300">
+                                                    Scene Planner
+                                                </TabsTrigger>
+                                                <TabsTrigger value="asset_reconciler" className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300">
+                                                    Asset Reconciler
+                                                </TabsTrigger>
+                                                <TabsTrigger value="screenwriter" className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300">
+                                                    Screenwriter
+                                                </TabsTrigger>
+                                            </TabsList>
+                                        </Tabs>
                                     </div>
 
-                                    {/* Editor */}
-                                    <DroppableEditor
-                                        content={currentPrompt}
-                                        onChange={handlePromptChange}
-                                        onVariableInsert={insertVariable}
-                                        editorRef={editorRef}
-                                    />
-                                </div>
-                            </>
+                                    <div className="flex-1 flex overflow-hidden">
+                                        {/* Variable Palette */}
+                                        <div className="w-72 border-r border-white/10 bg-black/10 p-4 overflow-y-auto">
+                                            <h3 className="text-sm font-semibold text-white/80 mb-3 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-orange-500" />
+                                                Variables
+                                            </h3>
+                                            <p className="text-xs text-white/40 mb-4">
+                                                Drag onto editor or click to insert
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {currentVariables.map(v => (
+                                                    <DraggableVariable
+                                                        key={v.name}
+                                                        variable={v}
+                                                        onClick={() => insertVariable(v.name)}
+                                                    />
+                                                ))}
+                                            </div>
+
+                                            {showPreview && (
+                                                <div className="mt-6 pt-4 border-t border-white/10">
+                                                    <h3 className="text-sm font-semibold text-white/80 mb-3 flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-green-500" />
+                                                        Example Values
+                                                    </h3>
+                                                    <div className="space-y-2 text-xs">
+                                                        {currentVariables.map(v => (
+                                                            <div key={v.name} className="flex flex-col">
+                                                                <span className="text-orange-400 font-mono">{"{{" + v.name + "}}"}</span>
+                                                                <span className="text-green-400/80 pl-2">→ {v.example}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Editor */}
+                                        <DroppableEditor
+                                            content={currentPrompt}
+                                            onChange={handlePromptChange}
+                                            editorRef={editorRef}
+                                        />
+                                    </div>
+                                </>
+                            )
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-white/40">
                                 Select a template to edit
