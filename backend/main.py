@@ -154,7 +154,7 @@ from services.director import generate_storyboard
 from services.image_processor import slice_grid_image
 from services.asset_generator import generate_asset_image
 from database import SessionLocal
-from models import ProjectDB, Project, SceneDB, Scene, ShotDB, Shot, CharacterDB, LocationDB, scene_characters, Character, Location, CharacterBase, LocationBase
+from models import ProjectDB, Project, SceneDB, Scene, ShotDB, Shot, CharacterDB, LocationDB, scene_characters, Character, Location, CharacterBase, LocationBase, CategoryPresetDB
 from fastapi.staticfiles import StaticFiles
 
 # Mount static directory
@@ -163,8 +163,29 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+# --- Category Preset Pydantic Schema ---
+class CategoryPreset(BaseModel):
+    id: int
+    slug: str
+    name: str
+    icon: str
+    description: str | None = None
+    thumbnail_url: str | None = None
+    default_aspect_ratio: str = "16:9"
+    default_duration: int = 60
+    default_language: str = "French"
+    default_visual_style: str | None = None
+    is_active: bool = True
 
+    class Config:
+        from_attributes = True
 
+# --- Category Presets Endpoint ---
+@app.get("/api/category-presets", response_model=list[CategoryPreset])
+async def get_category_presets(db: Session = Depends(get_db)):
+    """Get all active category presets."""
+    presets = db.query(CategoryPresetDB).filter(CategoryPresetDB.is_active == True).all()
+    return presets
 
 
 from models import ExtractConceptInput
@@ -223,28 +244,49 @@ async def extract_concept_endpoint(payload: ExtractConceptInput, db: Session = D
 
 
 class ProjectCreate(BaseModel):
-    title: str
-    genre: str
+    title: str = "Untitled Project"
+    genre: str | None = None
     pitch: str | None = ""
     visual_style: str | None = ""
     target_audience: str | None = ""
     language: str = "French"
     target_duration: str = "60s"
     aspect_ratio: str = "16:9"
+    category_preset_id: int | None = None
 
 @app.post("/api/projects", response_model=Project)
 async def create_project_endpoint(project_data: ProjectCreate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
+    # If category_preset_id is provided, fetch defaults from preset
+    preset = None
+    if project_data.category_preset_id:
+        preset = db.query(CategoryPresetDB).filter(CategoryPresetDB.id == project_data.category_preset_id).first()
+    
+    # Use preset defaults if available, otherwise use provided values
+    language = project_data.language
+    aspect_ratio = project_data.aspect_ratio
+    target_duration = project_data.target_duration
+    visual_style = project_data.visual_style
+    genre = project_data.genre
+    
+    if preset:
+        language = language or preset.default_language
+        aspect_ratio = aspect_ratio or preset.default_aspect_ratio
+        target_duration = target_duration or f"{preset.default_duration}s"
+        visual_style = visual_style or preset.default_visual_style
+        genre = genre or preset.name  # Use preset name as genre if not provided
+    
     new_project = ProjectDB(
         title=project_data.title,
-        genre=project_data.genre,
+        genre=genre,
         pitch=project_data.pitch,
-        visual_style=project_data.visual_style,
+        visual_style=visual_style,
         target_audience=project_data.target_audience,
-        language=project_data.language,
-        target_duration=project_data.target_duration,
-        aspect_ratio=project_data.aspect_ratio,
+        language=language,
+        target_duration=target_duration,
+        aspect_ratio=aspect_ratio,
         status="concept",
         user_id=user_id,
+        category_preset_id=project_data.category_preset_id,
         created_at=datetime.utcnow()
     )
     db.add(new_project)
@@ -809,6 +851,38 @@ async def unset_scene_location(scene_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Location removed from scene"}
 
+# ========================================
+# ONBOARDING AI ENDPOINTS
+# ========================================
+from services.onboarding_ai import analyze_pitch, generate_questions
+
+class AnalyzePitchInput(BaseModel):
+    pitch: str
+    category_slug: str
+
+@app.post("/api/onboarding/analyze-pitch")
+async def analyze_pitch_endpoint(data: AnalyzePitchInput):
+    """Analyze pitch and extract tags in real-time."""
+    result = await analyze_pitch(data.pitch, data.category_slug)
+    return result
+
+class GenerateQuestionsInput(BaseModel):
+    pitch: str
+    category_slug: str
+    detected_tags: list[str] = []
+    existing_answers: dict = {}
+
+@app.post("/api/onboarding/generate-questions")
+async def generate_questions_endpoint(data: GenerateQuestionsInput):
+    """Generate dynamic follow-up questions based on pitch and category."""
+    result = await generate_questions(
+        data.pitch,
+        data.category_slug,
+        data.detected_tags,
+        data.existing_answers
+    )
+    return result
+
 # --- Debug Endpoints ---
 from services.ai_logger import AILogger
 
@@ -825,5 +899,4 @@ async def clear_ai_logs(project_id: int = None):
 
 @app.get("/")
 async def root():
-    return {"message": "Cutify Backend v0.6 is running"}
-
+    return {"message": "Cutify Backend v0.7 is running"}

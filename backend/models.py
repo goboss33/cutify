@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Table, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -12,6 +12,30 @@ scene_characters = Table(
     Column('scene_id', Integer, ForeignKey('scenes.id'), primary_key=True),
     Column('character_id', Integer, ForeignKey('characters.id'), primary_key=True)
 )
+
+# --- Category Presets (Video Types) ---
+class CategoryPresetDB(Base):
+    __tablename__ = "category_presets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    icon = Column(String, nullable=False)
+    description = Column(Text)
+    thumbnail_url = Column(String, nullable=True)
+    
+    # Defaults for new projects
+    default_aspect_ratio = Column(String, default="16:9")
+    default_duration = Column(Integer, default=60)  # seconds
+    default_language = Column(String, default="French")
+    default_visual_style = Column(String, nullable=True)
+    
+    # Prompt hints for scene generation (JSON)
+    narrative_template = Column(Text, nullable=True)
+    scene_prompt_hints = Column(Text, nullable=True)
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 # --- SQLAlchemy Models ---
 class ProjectDB(Base):
@@ -29,7 +53,9 @@ class ProjectDB(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="concept")
     user_id = Column(String, index=True, nullable=True) # ID from Supabase Auth
+    category_preset_id = Column(Integer, ForeignKey("category_presets.id"), nullable=True)
     
+    category_preset = relationship("CategoryPresetDB")
     scenes = relationship("SceneDB", back_populates="project", cascade="all, delete-orphan", order_by="SceneDB.sequence_order")
     chat_history = relationship("ChatMessageDB", back_populates="project", cascade="all, delete-orphan")
     characters = relationship("CharacterDB", back_populates="project", cascade="all, delete-orphan")

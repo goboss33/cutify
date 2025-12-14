@@ -103,14 +103,18 @@
   --chart-3: #f59e0b;
   --chart-4: #8b5cf6;
   --chart-5: #ec4899;
-  --sidebar: #171717; /* Sligtly lighter than background for contrast if needed, or same */
+  --sidebar: #171717;
   --sidebar-foreground: #f8fafc;
-  --sidebar-primary: #3b82f6;
+  --sidebar-primary: #ff2d8a;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #262626;
   --sidebar-accent-foreground: #f8fafc;
   --sidebar-border: #262626;
-  --sidebar-ring: #1d4ed8;
+  --sidebar-ring: #ff2d8a;
+  
+  /* Neon Pink Accent */
+  --accent-pink: #ff2d8a;
+  --accent-pink-glow: rgba(255, 45, 138, 0.5);
 }
 
 @layer base {
@@ -123,4 +127,37 @@
     height: 100vh;
     width: 100vw;
   }
+}
+
+/* Neon Glow Utilities */
+.neon-glow {
+  box-shadow: 0 0 20px var(--accent-pink-glow),
+              0 0 40px rgba(255, 45, 138, 0.2);
+}
+
+.neon-glow-sm {
+  box-shadow: 0 0 10px var(--accent-pink-glow),
+              0 0 20px rgba(255, 45, 138, 0.15);
+}
+
+.neon-border {
+  border-color: var(--accent-pink);
+  box-shadow: 0 0 10px var(--accent-pink-glow);
+}
+
+.neon-text {
+  color: var(--accent-pink);
+  text-shadow: 0 0 10px var(--accent-pink-glow);
+}
+
+/* Category Card Hover Effect */
+.category-card {
+  transition: all 0.3s ease;
+}
+
+.category-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0 30px var(--accent-pink-glow),
+              0 10px 40px rgba(0, 0, 0, 0.3);
+  border-color: var(--accent-pink);
 }

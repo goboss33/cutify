@@ -23,13 +23,27 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CreateProjectWizard } from "@/components/dashboard/CreateProjectWizard";
+import { CategorySelector } from "@/components/dashboard/CategorySelector";
+import { OnboardingFlow } from "@/components/dashboard/OnboardingFlow";
+
+interface CategoryPreset {
+    id: number
+    slug: string
+    name: string
+    icon: string
+    description: string | null
+    default_aspect_ratio: string
+    default_duration: number
+    default_language: string
+    default_visual_style: string | null
+}
 
 export function Dashboard() {
     const { currentProject, setCurrentProject } = useProject();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState<"list" | "create">("list");
+    const [viewMode, setViewMode] = useState<"list" | "category" | "onboarding">("list");
+    const [selectedPreset, setSelectedPreset] = useState<CategoryPreset | null>(null);
     const [projectToDelete, setProjectToDelete] = useState<number | null>(null);
 
     const confirmDeleteProject = async () => {
@@ -132,13 +146,33 @@ export function Dashboard() {
         setProjects(prev => [...prev, newProject]);
         setCurrentProject(newProject);
         setViewMode("list");
+        setSelectedPreset(null);
     };
 
-    if (viewMode === "create") {
+    const handleCategorySelect = (preset: CategoryPreset) => {
+        setSelectedPreset(preset);
+        setViewMode("onboarding");
+    };
+
+    // Category Selection Screen
+    if (viewMode === "category") {
         return (
-            <div className="flex-1 p-8 overflow-y-auto bg-background/50 h-full">
-                <CreateProjectWizard
-                    onCancel={() => setViewMode("list")}
+            <div className="flex-1 overflow-y-auto bg-background/50 h-full relative">
+                <CategorySelector
+                    onSelect={handleCategorySelect}
+                    onBack={() => setViewMode("list")}
+                />
+            </div>
+        );
+    }
+
+    // Onboarding Flow
+    if (viewMode === "onboarding" && selectedPreset) {
+        return (
+            <div className="flex-1 overflow-y-auto bg-background/50 h-full">
+                <OnboardingFlow
+                    preset={selectedPreset}
+                    onBack={() => setViewMode("category")}
                     onProjectCreated={handleProjectCreated}
                 />
             </div>
@@ -160,10 +194,9 @@ export function Dashboard() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {/* New Project Card */}
                     <Card
-                        className="group cursor-pointer border-2 border-dashed border-muted bg-muted/5 hover:border-primary/50 hover:bg-muted/10 transition-all flex flex-col items-center justify-center min-h-[250px]"
-                        onClick={() => setViewMode("create")}
+                        className="group cursor-pointer border-2 border-dashed border-muted bg-muted/5 hover:border-[var(--accent-pink)]/50 hover:bg-muted/10 transition-all flex flex-col items-center justify-center min-h-[250px] category-card"
+                        onClick={() => setViewMode("category")}
                     >
                         <CardContent className="flex flex-col items-center justify-center p-6 text-center">
                             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors">
