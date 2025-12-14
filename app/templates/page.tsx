@@ -1,18 +1,19 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { DndContext, DragEndEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { DndContext, DragEndEvent, useDraggable, useDroppable, DragOverlay } from "@dnd-kit/core"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card } from "@/components/ui/card"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import {
     Film, ShoppingBag, GraduationCap, Share2, Music, Mic, Palette,
-    Plus, Save, Trash2, Search, ChevronLeft, GripVertical, Eye
+    Plus, Save, Search, ChevronLeft, GripVertical, Eye, AlertCircle, CheckCircle2
 } from "lucide-react"
-import Editor from "@monaco-editor/react"
+import Editor, { Monaco } from "@monaco-editor/react"
 import Link from "next/link"
+import type { editor } from "monaco-editor"
 
 // Icon mapping for templates
 const iconMap: Record<string, React.ReactNode> = {
@@ -23,6 +24,14 @@ const iconMap: Record<string, React.ReactNode> = {
     music: <Music className="h-4 w-4" />,
     podcast: <Mic className="h-4 w-4" />,
     motion_design: <Palette className="h-4 w-4" />,
+}
+
+// Tab to prompt key mapping
+const tabToPromptKey: Record<string, string> = {
+    context_analyzer: "context_analyzer",
+    scene_planner: "scene_planner",
+    asset_reconciler: "asset_reconciler",
+    screenwriter: "screenwriter"
 }
 
 interface Template {
@@ -39,8 +48,130 @@ interface Variable {
     example: string
 }
 
+// Stored prompts for each step (editable text prompts)
+interface StoredPrompts {
+    context_analyzer: string
+    scene_planner: string
+    asset_reconciler: string
+    screenwriter: string
+}
+
+const defaultPrompts: StoredPrompts = {
+    context_analyzer: `Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.
+
+TYPE DE VIDÉO: {{video_type}}
+
+ENTRÉES:
+- Titre: "{{title}}"
+- Pitch: "{{pitch}}"
+- Style visuel demandé: "{{visual_style}}"
+- Durée cible: {{duration}} secondes
+- Tags détectés: {{tags_str}}
+- Réponses utilisateur: {{answers_str}}
+
+INSTRUCTIONS:
+1. Analyse le pitch pour extraire les personnages, lieux, ton, etc.
+2. Fusionne le style visuel (pitch + demandé)
+3. Calcule le nombre de scènes suggéré (durée / 15 secondes environ)
+
+RETOURNE CE JSON REMPLI:
+{
+  "fused_visual_style": "...",
+  "tone": "...",
+  "pacing": "...",
+  "language": "French",
+  "target_duration_seconds": {{duration}},
+  "suggested_scene_count": ...,
+  "key_narrative_elements": ["...", "..."],
+  "characters_detected": ["...", "..."],
+  "locations_detected": ["...", "..."],
+  "narrative_arc_type": "...",
+  "target_audience": "...",
+  "mood": "..."
+}`,
+    scene_planner: `Tu es un planificateur de scènes. Crée un plan de scènes pour cette vidéo.
+
+TYPE DE VIDÉO: {{video_type}}
+
+CONTEXTE:
+- Style: {{visual_style}}
+- Ton: {{tone}}
+- Durée TOTALE: {{target_duration}} secondes
+- Nombre de scènes suggéré: {{suggested_count}}
+- Personnages: {{characters}}
+- Lieux: {{locations}}
+- Arc narratif: {{narrative_arc}}
+
+CONTRAINTES:
+- La somme de toutes les durées DOIT égaler EXACTEMENT {{target_duration}} secondes
+- Minimum 5s par scène, maximum 45s par scène
+
+RETOURNE CE JSON REMPLI:
+{
+  "scene_plan": [
+    {"index": 1, "type": "setup", "title_suggestion": "...", "duration_seconds": 20, "purpose": "...", "key_action": "..."},
+    ...
+  ],
+  "total_duration_seconds": {{target_duration}}
+}`,
+    asset_reconciler: `Tu es un gestionnaire d'assets. Identifie les personnages et lieux nécessaires.
+
+TYPE DE VIDÉO: {{video_type}}
+STYLE VISUEL: {{visual_style}}
+
+PERSONNAGES DÉTECTÉS: {{characters}}
+LIEUX DÉTECTÉS: {{locations}}
+
+ASSETS EXISTANTS:
+{{existing_assets}}
+
+RÈGLES:
+- USE: si un asset existant correspond
+- CREATE: si l'asset n'existe pas
+- JAMAIS créer de doublon
+
+RETOURNE CE JSON REMPLI:
+{
+  "character_plan": [
+    {"role_name": "Nom", "action": "USE|CREATE", "create_prompt": "description si CREATE"}
+  ],
+  "location_plan": [
+    {"role_name": "Lieu", "action": "USE|CREATE", "create_prompt": "description si CREATE"}
+  ],
+  "object_plan": []
+}`,
+    screenwriter: `Tu es un scénariste. Écris les scènes détaillées pour cette vidéo.
+
+TYPE: {{video_type}}
+TITRE: "{{title}}"
+PITCH: "{{pitch}}"
+STYLE: {{visual_style}}
+TON: {{tone}}
+DURÉE TOTALE: {{target_duration}} secondes
+
+PLAN DE SCÈNES À SUIVRE:
+{{scene_plan}}
+
+PERSONNAGES DISPONIBLES: {{characters}}
+LIEUX DISPONIBLES: {{locations}}
+
+CONTRAINTES:
+- Respecte les durées du plan
+- Écris en French
+- La somme des durées DOIT égaler {{target_duration}}s
+
+RETOURNE CE JSON REMPLI:
+{
+  "scenes": [
+    {"index": 1, "title": "...", "summary": "2-3 phrases", "duration_seconds": 20, "character_names": ["..."], "location_name": "..."},
+    ...
+  ],
+  "total_duration_seconds": {{target_duration}}
+}`
+}
+
 // Draggable Variable Chip
-function DraggableVariable({ variable }: { variable: Variable }) {
+function DraggableVariable({ variable, onClick }: { variable: Variable, onClick: () => void }) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: variable.name,
         data: { variable }
@@ -51,15 +182,16 @@ function DraggableVariable({ variable }: { variable: Variable }) {
             ref={setNodeRef}
             {...listeners}
             {...attributes}
+            onClick={onClick}
             className={`
                 flex items-center gap-1.5 px-3 py-1.5 rounded-full 
                 bg-orange-500/20 border border-orange-500/40 
                 text-orange-400 text-sm font-mono cursor-grab
                 hover:bg-orange-500/30 hover:border-orange-500/60
-                transition-all duration-200
+                transition-all duration-200 select-none
                 ${isDragging ? 'opacity-50 scale-95' : ''}
             `}
-            title={variable.description}
+            title={`${variable.description} - Click to insert`}
         >
             <GripVertical className="h-3 w-3 opacity-50" />
             <span>{"{{" + variable.name + "}}"}</span>
@@ -67,16 +199,99 @@ function DraggableVariable({ variable }: { variable: Variable }) {
     )
 }
 
+// Droppable Editor Area
+function DroppableEditor({
+    content,
+    onChange,
+    onVariableInsert,
+    editorRef
+}: {
+    content: string
+    onChange: (value: string) => void
+    onVariableInsert: (varName: string) => void
+    editorRef: React.MutableRefObject<editor.IStandaloneCodeEditor | null>
+}) {
+    const { setNodeRef, isOver } = useDroppable({ id: "editor-drop-zone" })
+
+    const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
+        editorRef.current = editor
+
+        // Register custom language tokens for variables
+        monaco.languages.register({ id: 'promptlang' })
+        monaco.languages.setMonarchTokensProvider('promptlang', {
+            tokenizer: {
+                root: [
+                    [/\{\{[^}]+\}\}/, 'variable'],
+                    [/"[^"]*"/, 'string'],
+                    [/\d+/, 'number'],
+                ]
+            }
+        })
+
+        monaco.editor.defineTheme('prompt-theme', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [
+                { token: 'variable', foreground: 'f97316', fontStyle: 'bold' },
+                { token: 'string', foreground: '22c55e' },
+                { token: 'number', foreground: '60a5fa' },
+            ],
+            colors: {
+                'editor.background': '#0c0a1d',
+                'editor.lineHighlightBackground': '#1e1b4b30',
+            }
+        })
+
+        monaco.editor.setTheme('prompt-theme')
+    }
+
+    return (
+        <div
+            ref={setNodeRef}
+            className={`flex-1 overflow-hidden relative transition-all duration-200 ${isOver ? 'ring-2 ring-orange-500 ring-inset' : ''}`}
+        >
+            {isOver && (
+                <div className="absolute inset-0 bg-orange-500/10 z-10 pointer-events-none flex items-center justify-center">
+                    <span className="text-orange-400 text-lg font-semibold">Drop to insert variable</span>
+                </div>
+            )}
+            <Editor
+                height="100%"
+                defaultLanguage="promptlang"
+                theme="prompt-theme"
+                value={content}
+                onChange={(value) => onChange(value || "")}
+                onMount={handleEditorMount}
+                options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    lineNumbers: "on",
+                    roundedSelection: true,
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    tabSize: 2,
+                    wordWrap: "on",
+                    padding: { top: 16 },
+                    renderWhitespace: "none",
+                }}
+            />
+        </div>
+    )
+}
+
 export default function TemplateEditorPage() {
     const [templates, setTemplates] = useState<Template[]>([])
     const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
-    const [editedContent, setEditedContent] = useState("")
+    const [prompts, setPrompts] = useState<StoredPrompts>(defaultPrompts)
     const [variables, setVariables] = useState<Record<string, Variable[]>>({})
-    const [activeTab, setActiveTab] = useState("context_analyzer")
+    const [activeTab, setActiveTab] = useState<keyof StoredPrompts>("context_analyzer")
     const [searchQuery, setSearchQuery] = useState("")
     const [isSaving, setIsSaving] = useState(false)
     const [showPreview, setShowPreview] = useState(false)
     const [hasChanges, setHasChanges] = useState(false)
+    const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle")
+
+    const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
 
     // Load templates
     useEffect(() => {
@@ -85,8 +300,9 @@ export default function TemplateEditorPage() {
             .then(data => {
                 setTemplates(data)
                 if (data.length > 0 && !selectedTemplate) {
-                    setSelectedTemplate(data[0])
-                    setEditedContent(JSON.stringify(data[0].full_template, null, 2))
+                    const first = data[0]
+                    setSelectedTemplate(first)
+                    loadPromptsFromTemplate(first.full_template)
                 }
             })
             .catch(console.error)
@@ -100,54 +316,115 @@ export default function TemplateEditorPage() {
             .catch(console.error)
     }, [])
 
-    // Update edited content when template changes
+    // Extract prompts from template
+    const loadPromptsFromTemplate = (template: Record<string, unknown>) => {
+        const templatePrompts = template.prompts as Record<string, unknown> | undefined
+        if (templatePrompts) {
+            const newPrompts = { ...defaultPrompts }
+
+            // For each step, check if there's a custom_prompt field
+            for (const key of Object.keys(defaultPrompts) as (keyof StoredPrompts)[]) {
+                const stepConfig = templatePrompts[key] as Record<string, unknown> | undefined
+                if (stepConfig?.custom_prompt && typeof stepConfig.custom_prompt === 'string') {
+                    newPrompts[key] = stepConfig.custom_prompt
+                }
+            }
+
+            setPrompts(newPrompts)
+        } else {
+            setPrompts(defaultPrompts)
+        }
+        setHasChanges(false)
+    }
+
+    // When template changes, load its prompts
     useEffect(() => {
         if (selectedTemplate) {
-            setEditedContent(JSON.stringify(selectedTemplate.full_template, null, 2))
-            setHasChanges(false)
+            loadPromptsFromTemplate(selectedTemplate.full_template)
         }
     }, [selectedTemplate])
 
-    const handleEditorChange = useCallback((value: string | undefined) => {
-        if (value !== undefined) {
-            setEditedContent(value)
-            setHasChanges(true)
+    const handlePromptChange = (value: string) => {
+        setPrompts(prev => ({ ...prev, [activeTab]: value }))
+        setHasChanges(true)
+        setSaveStatus("idle")
+    }
+
+    const insertVariable = (varName: string) => {
+        const editor = editorRef.current
+        if (editor) {
+            const selection = editor.getSelection()
+            const insertion = `{{${varName}}}`
+
+            if (selection) {
+                editor.executeEdits("insert-variable", [{
+                    range: selection,
+                    text: insertion,
+                    forceMoveMarkers: true
+                }])
+                editor.focus()
+            }
         }
-    }, [])
+    }
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event
+
+        if (over?.id === "editor-drop-zone" && active.data.current?.variable) {
+            const varName = active.data.current.variable.name
+            insertVariable(varName)
+        }
+    }
 
     const handleSave = async () => {
         if (!selectedTemplate) return
         setIsSaving(true)
+        setSaveStatus("idle")
+
         try {
-            const parsed = JSON.parse(editedContent)
+            // Build updated template with custom prompts
+            const updatedTemplate = { ...selectedTemplate.full_template }
+
+            // Ensure prompts object exists
+            if (!updatedTemplate.prompts) {
+                updatedTemplate.prompts = {}
+            }
+
+            const templatePrompts = updatedTemplate.prompts as Record<string, unknown>
+
+            // Save each prompt
+            for (const key of Object.keys(prompts) as (keyof StoredPrompts)[]) {
+                if (!templatePrompts[key]) {
+                    templatePrompts[key] = {}
+                }
+                (templatePrompts[key] as Record<string, unknown>).custom_prompt = prompts[key]
+            }
+
             const res = await fetch(`http://127.0.0.1:8000/api/templates/${selectedTemplate.slug}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ template: parsed })
+                body: JSON.stringify({ template: updatedTemplate })
             })
+
             if (res.ok) {
                 setHasChanges(false)
+                setSaveStatus("success")
+
                 // Refresh templates
                 const updated = await fetch("http://127.0.0.1:8000/api/templates").then(r => r.json())
                 setTemplates(updated)
                 const refreshed = updated.find((t: Template) => t.slug === selectedTemplate.slug)
                 if (refreshed) setSelectedTemplate(refreshed)
+
+                setTimeout(() => setSaveStatus("idle"), 2000)
+            } else {
+                setSaveStatus("error")
             }
         } catch (e) {
-            alert("Invalid JSON or save failed")
+            console.error(e)
+            setSaveStatus("error")
         } finally {
             setIsSaving(false)
-        }
-    }
-
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active } = event
-        if (active.data.current?.variable) {
-            const varName = active.data.current.variable.name
-            const insertion = `{{${varName}}}`
-            // Insert at cursor position would require monaco ref
-            // For now, copy to clipboard
-            navigator.clipboard.writeText(insertion)
         }
     }
 
@@ -157,6 +434,7 @@ export default function TemplateEditorPage() {
     )
 
     const currentVariables = variables[activeTab] || []
+    const currentPrompt = prompts[activeTab]
 
     return (
         <DndContext onDragEnd={handleDragEnd}>
@@ -165,13 +443,18 @@ export default function TemplateEditorPage() {
                 <header className="border-b border-white/10 bg-black/20 backdrop-blur-xl sticky top-0 z-50">
                     <div className="max-w-[1800px] mx-auto px-4 h-14 flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <Link href="/dashboard" className="text-white/60 hover:text-white transition-colors">
+                            <Link href="/ai-console" className="text-white/60 hover:text-white transition-colors">
                                 <ChevronLeft className="h-5 w-5" />
                             </Link>
-                            <h1 className="text-lg font-semibold text-white">Template Editor</h1>
+                            <h1 className="text-lg font-semibold text-white">Prompt Editor</h1>
                             {selectedTemplate && (
                                 <Badge variant="outline" className="border-purple-500/50 text-purple-400">
                                     {selectedTemplate.name}
+                                </Badge>
+                            )}
+                            {hasChanges && (
+                                <Badge variant="outline" className="border-yellow-500/50 text-yellow-400">
+                                    Unsaved changes
                                 </Badge>
                             )}
                         </div>
@@ -189,10 +472,15 @@ export default function TemplateEditorPage() {
                                 size="sm"
                                 onClick={handleSave}
                                 disabled={!hasChanges || isSaving}
-                                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 min-w-[100px]"
                             >
-                                <Save className="h-4 w-4 mr-1" />
-                                {isSaving ? "Saving..." : "Save"}
+                                {saveStatus === "success" ? (
+                                    <><CheckCircle2 className="h-4 w-4 mr-1" /> Saved!</>
+                                ) : saveStatus === "error" ? (
+                                    <><AlertCircle className="h-4 w-4 mr-1" /> Error</>
+                                ) : (
+                                    <><Save className="h-4 w-4 mr-1" /> {isSaving ? "Saving..." : "Save"}</>
+                                )}
                             </Button>
                         </div>
                     </div>
@@ -248,9 +536,9 @@ export default function TemplateEditorPage() {
                     <main className="flex-1 flex flex-col overflow-hidden">
                         {selectedTemplate ? (
                             <>
-                                {/* Tabs for different prompt sections */}
+                                {/* Tabs */}
                                 <div className="border-b border-white/10 bg-black/10">
-                                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as keyof StoredPrompts)} className="w-full">
                                         <TabsList className="h-12 bg-transparent border-0 px-4 justify-start gap-1">
                                             <TabsTrigger
                                                 value="context_analyzer"
@@ -285,14 +573,18 @@ export default function TemplateEditorPage() {
                                     <div className="w-72 border-r border-white/10 bg-black/10 p-4 overflow-y-auto">
                                         <h3 className="text-sm font-semibold text-white/80 mb-3 flex items-center gap-2">
                                             <span className="w-2 h-2 rounded-full bg-orange-500" />
-                                            Available Variables
+                                            Variables
                                         </h3>
                                         <p className="text-xs text-white/40 mb-4">
-                                            Drag to copy • Click to insert
+                                            Drag onto editor or click to insert
                                         </p>
                                         <div className="flex flex-wrap gap-2">
                                             {currentVariables.map(v => (
-                                                <DraggableVariable key={v.name} variable={v} />
+                                                <DraggableVariable
+                                                    key={v.name}
+                                                    variable={v}
+                                                    onClick={() => insertVariable(v.name)}
+                                                />
                                             ))}
                                         </div>
 
@@ -314,27 +606,13 @@ export default function TemplateEditorPage() {
                                         )}
                                     </div>
 
-                                    {/* Monaco Editor */}
-                                    <div className="flex-1 overflow-hidden">
-                                        <Editor
-                                            height="100%"
-                                            defaultLanguage="json"
-                                            theme="vs-dark"
-                                            value={editedContent}
-                                            onChange={handleEditorChange}
-                                            options={{
-                                                minimap: { enabled: false },
-                                                fontSize: 14,
-                                                lineNumbers: "on",
-                                                roundedSelection: true,
-                                                scrollBeyondLastLine: false,
-                                                automaticLayout: true,
-                                                tabSize: 2,
-                                                wordWrap: "on",
-                                                padding: { top: 16 }
-                                            }}
-                                        />
-                                    </div>
+                                    {/* Editor */}
+                                    <DroppableEditor
+                                        content={currentPrompt}
+                                        onChange={handlePromptChange}
+                                        onVariableInsert={insertVariable}
+                                        editorRef={editorRef}
+                                    />
                                 </div>
                             </>
                         ) : (
