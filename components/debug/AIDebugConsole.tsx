@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCcw, Trash2, Terminal, Image as ImageIcon, MessageSquare, Code, FileJson, ArrowLeft } from "lucide-react";
+import { RefreshCcw, Trash2, Terminal, Image as ImageIcon, MessageSquare, Code, FileJson, ArrowLeft, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/store/ProjectContext";
 
@@ -223,6 +224,13 @@ export function AIDebugConsole() {
                             </Button>
                         </div>
                     </div>
+                    {/* Template Editor Button */}
+                    <Link href="/templates">
+                        <Button variant="outline" size="sm" className="w-full mt-2 border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
+                            <Settings className="w-4 h-4 mr-2" />
+                            Template Editor
+                        </Button>
+                    </Link>
                 </div>
                 <ScrollArea className="flex-1">
                     <div className="flex flex-col p-2 gap-2">

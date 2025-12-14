@@ -1019,6 +1019,94 @@ async def clear_ai_logs(project_id: int = None):
     AILogger.clear_logs(project_id=project_id)
     return {"status": "cleared"}
 
+# --- Template Editor Endpoints ---
+from services.template_loader import get_all_templates, save_template, delete_template, create_template
+
+@app.get("/api/templates")
+async def list_templates():
+    """List all available prompt templates."""
+    return get_all_templates()
+
+@app.get("/api/templates/{slug}")
+async def get_template(slug: str):
+    """Get a specific template by slug."""
+    from services.template_loader import load_template
+    template = load_template(slug)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"slug": slug, "full_template": template}
+
+class TemplateUpdate(BaseModel):
+    template: dict
+
+@app.put("/api/templates/{slug}")
+async def update_template(slug: str, data: TemplateUpdate):
+    """Update a template."""
+    success = save_template(slug, data.template)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save template")
+    return {"status": "updated", "slug": slug}
+
+class TemplateCreate(BaseModel):
+    slug: str
+    template: dict
+
+@app.post("/api/templates")
+async def create_new_template(data: TemplateCreate):
+    """Create a new template."""
+    success = create_template(data.slug, data.template)
+    if not success:
+        raise HTTPException(status_code=400, detail="Template already exists or invalid")
+    return {"status": "created", "slug": data.slug}
+
+@app.delete("/api/templates/{slug}")
+async def remove_template(slug: str):
+    """Delete a template (protected templates cannot be deleted)."""
+    success = delete_template(slug)
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot delete protected template or template not found")
+    return {"status": "deleted", "slug": slug}
+
+@app.get("/api/templates/variables/all")
+async def get_all_variables():
+    """Get all available variables for templates."""
+    return {
+        "context_analyzer": [
+            {"name": "title", "description": "Titre du projet", "example": "La Cigale et la Fourmi"},
+            {"name": "pitch", "description": "Description/pitch du projet", "example": "Un dessin animé pour enfants..."},
+            {"name": "visual_style", "description": "Style visuel demandé", "example": "Cinematic"},
+            {"name": "duration", "description": "Durée en secondes", "example": "180"},
+            {"name": "tags_str", "description": "Tags détectés", "example": "Fable, Enfant, Animation"},
+            {"name": "answers_str", "description": "Réponses utilisateur", "example": "Leçon morale, 10 ans"},
+        ],
+        "scene_planner": [
+            {"name": "visual_style", "description": "Style fusionné", "example": "Ghibli + Cinematic"},
+            {"name": "tone", "description": "Ton déduit", "example": "Conte moral"},
+            {"name": "target_duration", "description": "Durée cible", "example": "180"},
+            {"name": "suggested_count", "description": "Nombre de scènes suggéré", "example": "12"},
+            {"name": "characters", "description": "Personnages détectés", "example": "La Cigale, La Fourmi"},
+            {"name": "locations", "description": "Lieux détectés", "example": "Champ, Fourmilière"},
+            {"name": "narrative_arc", "description": "Type d'arc narratif", "example": "fable"},
+        ],
+        "asset_reconciler": [
+            {"name": "visual_style", "description": "Style fusionné", "example": "Ghibli + Cinematic"},
+            {"name": "characters", "description": "Personnages à gérer", "example": "La Cigale, La Fourmi"},
+            {"name": "locations", "description": "Lieux à gérer", "example": "Champ, Fourmilière"},
+            {"name": "existing_assets", "description": "Assets existants formatés", "example": "ID:1 [character] \"La Cigale\""},
+        ],
+        "screenwriter": [
+            {"name": "title", "description": "Titre", "example": "La Cigale et la Fourmi"},
+            {"name": "pitch", "description": "Pitch", "example": "Un dessin animé..."},
+            {"name": "visual_style", "description": "Style fusionné", "example": "Ghibli + Cinematic"},
+            {"name": "tone", "description": "Ton", "example": "Conte moral"},
+            {"name": "target_duration", "description": "Durée cible", "example": "180"},
+            {"name": "scene_plan", "description": "Plan de scènes formaté", "example": "Scène 1: setup (15s)..."},
+            {"name": "characters", "description": "Personnages disponibles", "example": "La Cigale, La Fourmi"},
+            {"name": "locations", "description": "Lieux disponibles", "example": "Champ, Fourmilière"},
+        ]
+    }
+
 @app.get("/")
 async def root():
-    return {"message": "Cutify Backend v0.7 is running"}
+    return {"message": "Cutify Backend v0.8 - Template Editor"}
+

@@ -33,6 +33,83 @@ def load_template(video_type: str) -> Optional[dict]:
         return None
 
 
+def get_all_templates() -> list[dict]:
+    """Get all available templates with metadata."""
+    templates = []
+    if TEMPLATES_DIR.exists():
+        for file in sorted(TEMPLATES_DIR.glob("*.json")):
+            try:
+                with open(file, "r", encoding="utf-8") as f:
+                    template = json.load(f)
+                    templates.append({
+                        "slug": file.stem,
+                        "type": template.get("type", file.stem),
+                        "name": template.get("name", file.stem),
+                        "description": template.get("description", ""),
+                        "full_template": template
+                    })
+            except Exception as e:
+                print(f"Error loading template {file}: {e}")
+    return templates
+
+
+def save_template(slug: str, data: dict) -> bool:
+    """Save/update a template to disk."""
+    template_path = TEMPLATES_DIR / f"{slug}.json"
+    
+    try:
+        # Clear cache for this template
+        if slug in _template_cache:
+            del _template_cache[slug]
+        
+        with open(template_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"Error saving template {slug}: {e}")
+        return False
+
+
+def delete_template(slug: str) -> bool:
+    """Delete a template from disk."""
+    template_path = TEMPLATES_DIR / f"{slug}.json"
+    
+    # Prevent deletion of core templates
+    protected = ["cinematic", "advertising", "tutorial"]
+    if slug in protected:
+        return False
+    
+    try:
+        if slug in _template_cache:
+            del _template_cache[slug]
+        
+        if template_path.exists():
+            template_path.unlink()
+            return True
+        return False
+    except Exception as e:
+        print(f"Error deleting template {slug}: {e}")
+        return False
+
+
+def create_template(slug: str, data: dict) -> bool:
+    """Create a new template."""
+    template_path = TEMPLATES_DIR / f"{slug}.json"
+    
+    if template_path.exists():
+        return False  # Already exists
+    
+    # Add default structure if missing
+    if "type" not in data:
+        data["type"] = slug
+    if "name" not in data:
+        data["name"] = slug.replace("_", " ").title()
+    
+    return save_template(slug, data)
+
+
+
+
 def build_context_prompt(template: dict, inputs: dict) -> tuple[str, str]:
     """
     Build context analyzer prompt - CLEAR instruction to fill values.
