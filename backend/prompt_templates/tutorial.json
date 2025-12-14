@@ -1,0 +1,133 @@
+{
+    "type": "tutorial",
+    "name": "Tutoriel / How-To",
+    "description": "Vidéos éducatives, guides pratiques, formations",
+    "required_inputs": {
+        "title": "Titre du tutoriel",
+        "pitch": "Ce que le viewer va apprendre",
+        "topic": "Sujet principal",
+        "duration_seconds": "Durée cible"
+    },
+    "optional_inputs": {
+        "skill_level": "Niveau (débutant, intermédiaire, avancé)",
+        "tools_needed": "Outils ou prérequis",
+        "visual_style": "Style visuel"
+    },
+    "context_extraction": {
+        "learning_objectives": "Objectifs d'apprentissage",
+        "steps": "Étapes du tutoriel",
+        "prerequisites": "Prérequis",
+        "tools": "Outils nécessaires",
+        "common_mistakes": "Erreurs courantes à éviter"
+    },
+    "scene_structure": {
+        "types": [
+            "intro",
+            "overview",
+            "step",
+            "demo",
+            "recap",
+            "outro"
+        ],
+        "distribution": {
+            "intro": 0.10,
+            "overview": 0.10,
+            "steps": 0.60,
+            "recap": 0.10,
+            "outro": 0.10
+        }
+    },
+    "asset_types": [
+        "screen_recording",
+        "diagram",
+        "text_overlay",
+        "presenter"
+    ],
+    "prompts": {
+        "context_analyzer": {
+            "role": "context_analyzer",
+            "task": "Analyser le tutoriel et structurer le contenu éducatif",
+            "input_keys": [
+                "title",
+                "pitch",
+                "topic",
+                "duration_seconds",
+                "detected_tags"
+            ],
+            "output_schema": {
+                "topic": "string",
+                "skill_level": "string",
+                "visual_style": "string",
+                "target_duration_seconds": "number",
+                "suggested_scene_count": "number",
+                "learning_objectives": "array",
+                "main_steps": "array",
+                "tools_needed": "array",
+                "target_audience": "string"
+            }
+        },
+        "scene_planner": {
+            "role": "scene_planner",
+            "task": "Planifier les étapes du tutoriel",
+            "scene_types": [
+                "intro",
+                "overview",
+                "step",
+                "demo",
+                "recap",
+                "outro"
+            ],
+            "output_schema": {
+                "scene_plan": [
+                    {
+                        "index": "number",
+                        "type": "string",
+                        "title_suggestion": "string",
+                        "duration_seconds": "number",
+                        "learning_point": "string",
+                        "key_action": "string"
+                    }
+                ],
+                "total_duration_seconds": "number"
+            }
+        },
+        "asset_reconciler": {
+            "role": "asset_reconciler",
+            "task": "Identifier les éléments visuels éducatifs",
+            "asset_categories": {
+                "diagrams": "Schémas et illustrations",
+                "screenshots": "Captures d'écran",
+                "text_overlays": "Textes et annotations"
+            }
+        },
+        "screenwriter": {
+            "role": "screenwriter",
+            "task": "Écrire le script du tutoriel",
+            "output_schema": {
+                "scenes": [
+                    {
+                        "index": "number",
+                        "title": "string",
+                        "summary": "string",
+                        "duration_seconds": "number",
+                        "voiceover": "string",
+                        "on_screen_action": "string",
+                        "key_takeaway": "string"
+                    }
+                ]
+            }
+        }
+    },
+    "ai_questions": {
+        "hints": "Demande le niveau de l'audience, les prérequis, le résultat attendu",
+        "avoid": [
+            "C'est quoi le sujet?"
+        ],
+        "focus": [
+            "niveau",
+            "objectif",
+            "prérequis",
+            "outils"
+        ]
+    }
+}

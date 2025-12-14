@@ -1,0 +1,89 @@
+{
+    "type": "music",
+    "name": "Clip Musical / Visualizer",
+    "description": "Clips musicaux, visualizers audio, lyric videos",
+    "required_inputs": {
+        "title": "Titre du morceau",
+        "pitch": "Ambiance et concept visuel",
+        "artist": "Artiste ou groupe",
+        "duration_seconds": "Durée du clip"
+    },
+    "optional_inputs": {
+        "visual_style": "Style visuel (abstrait, narratif, etc.)",
+        "genre_musical": "Genre musical",
+        "mood": "Ambiance"
+    },
+    "context_extraction": {
+        "music_genre": "Genre musical",
+        "visual_mood": "Ambiance visuelle",
+        "color_palette": "Palette de couleurs",
+        "movement_style": "Type de mouvement (énergique, planant, etc.)"
+    },
+    "scene_structure": {
+        "types": [
+            "intro",
+            "verse",
+            "chorus",
+            "bridge",
+            "outro"
+        ],
+        "distribution": {
+            "intro": 0.10,
+            "verse": 0.25,
+            "chorus": 0.35,
+            "bridge": 0.15,
+            "outro": 0.15
+        }
+    },
+    "asset_types": [
+        "visual_element",
+        "color_gradient",
+        "particle_effect"
+    ],
+    "prompts": {
+        "context_analyzer": {
+            "role": "context_analyzer",
+            "task": "Analyser le concept du clip musical",
+            "output_schema": {
+                "visual_style": "string",
+                "mood": "string",
+                "color_palette": "string",
+                "movement_intensity": "string",
+                "target_duration_seconds": "number",
+                "suggested_scene_count": "number"
+            }
+        },
+        "scene_planner": {
+            "role": "scene_planner",
+            "task": "Planifier les séquences visuelles du clip",
+            "scene_types": [
+                "intro",
+                "verse",
+                "chorus",
+                "bridge",
+                "outro"
+            ]
+        },
+        "asset_reconciler": {
+            "role": "asset_reconciler",
+            "task": "Identifier les éléments visuels du clip",
+            "asset_categories": {
+                "visual_elements": "Éléments visuels abstraits ou figuratifs",
+                "effects": "Effets visuels (particules, flares, etc.)"
+            }
+        },
+        "screenwriter": {
+            "role": "visual_director",
+            "task": "Décrire les séquences visuelles du clip"
+        }
+    },
+    "ai_questions": {
+        "hints": "Demande le genre musical, l'ambiance, les couleurs dominantes",
+        "focus": [
+            "ambiance",
+            "couleurs",
+            "énergie",
+            "style visuel"
+        ]
+    }
+}

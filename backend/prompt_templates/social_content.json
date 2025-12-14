@@ -1,0 +1,125 @@
+{
+    "type": "social_content",
+    "name": "Social Content / Shorts",
+    "description": "TikTok, Reels, YouTube Shorts, contenu viral",
+    "required_inputs": {
+        "title": "Concept de la vidéo",
+        "pitch": "L'idée en une phrase",
+        "hook": "Le hook des 3 premières secondes",
+        "duration_seconds": "Durée (15-60s typiquement)"
+    },
+    "optional_inputs": {
+        "visual_style": "Style visuel",
+        "platform": "Plateforme cible (TikTok, Reels, Shorts)",
+        "trend": "Tendance ou format à utiliser"
+    },
+    "context_extraction": {
+        "hook_type": "Type de hook (question, choc, curiosité)",
+        "content_type": "Type de contenu (POV, storytime, tutorial, comedy)",
+        "retention_strategy": "Stratégie pour garder l'attention",
+        "payoff": "La révélation ou conclusion"
+    },
+    "scene_structure": {
+        "types": [
+            "hook",
+            "tension",
+            "payoff",
+            "cta"
+        ],
+        "distribution": {
+            "hook": 0.10,
+            "tension": 0.60,
+            "payoff": 0.20,
+            "cta": 0.10
+        }
+    },
+    "asset_types": [
+        "background",
+        "text_overlay",
+        "sound_effect",
+        "transition"
+    ],
+    "prompts": {
+        "context_analyzer": {
+            "role": "context_analyzer",
+            "task": "Analyser le concept viral et optimiser pour l'engagement",
+            "input_keys": [
+                "title",
+                "pitch",
+                "hook",
+                "duration_seconds",
+                "detected_tags"
+            ],
+            "output_schema": {
+                "hook": "string",
+                "visual_style": "string",
+                "content_type": "string",
+                "target_duration_seconds": "number",
+                "suggested_scene_count": "number",
+                "retention_hooks": "array",
+                "payoff": "string",
+                "target_audience": "string",
+                "platform_optimization": "string"
+            }
+        },
+        "scene_planner": {
+            "role": "scene_planner",
+            "task": "Planifier les moments clés pour maximiser la rétention",
+            "scene_types": [
+                "hook",
+                "tension",
+                "twist",
+                "payoff",
+                "cta"
+            ],
+            "output_schema": {
+                "scene_plan": [
+                    {
+                        "index": "number",
+                        "type": "string",
+                        "duration_seconds": "number",
+                        "retention_purpose": "string",
+                        "text_overlay": "string"
+                    }
+                ],
+                "total_duration_seconds": "number"
+            }
+        },
+        "asset_reconciler": {
+            "role": "asset_reconciler",
+            "task": "Identifier les éléments visuels impactants",
+            "asset_categories": {
+                "backgrounds": "Arrière-plans",
+                "text_overlays": "Textes à l'écran (hooks, captions)",
+                "transitions": "Transitions dynamiques"
+            }
+        },
+        "screenwriter": {
+            "role": "screenwriter",
+            "task": "Écrire le script optimisé pour la viralité",
+            "output_schema": {
+                "scenes": [
+                    {
+                        "index": "number",
+                        "duration_seconds": "number",
+                        "on_screen_text": "string",
+                        "action": "string",
+                        "audio_cue": "string"
+                    }
+                ]
+            }
+        }
+    },
+    "ai_questions": {
+        "hints": "Demande le format, le hook, la plateforme cible",
+        "avoid": [
+            "C'est quoi ta vidéo?"
+        ],
+        "focus": [
+            "hook",
+            "format",
+            "plateforme",
+            "tendance"
+        ]
+    }
+}

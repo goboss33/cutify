@@ -1,0 +1,138 @@
+{
+    "type": "advertising",
+    "name": "Publicité / Ad",
+    "description": "Spots publicitaires, promos produit, brand content",
+    "required_inputs": {
+        "title": "Nom de la campagne",
+        "pitch": "Description du message",
+        "brand": "Marque ou entreprise",
+        "product": "Produit ou service",
+        "duration_seconds": "Durée cible"
+    },
+    "optional_inputs": {
+        "visual_style": "Style visuel",
+        "target_audience": "Public cible",
+        "call_to_action": "Action souhaitée",
+        "platform": "Plateforme de diffusion (TV, YouTube, TikTok)"
+    },
+    "context_extraction": {
+        "brand_identity": "Identité de marque",
+        "value_proposition": "Proposition de valeur",
+        "emotional_trigger": "Déclencheur émotionnel",
+        "key_message": "Message clé",
+        "competitive_advantage": "Avantage concurrentiel"
+    },
+    "scene_structure": {
+        "types": [
+            "hook",
+            "problem",
+            "solution",
+            "proof",
+            "cta"
+        ],
+        "distribution": {
+            "hook": 0.15,
+            "problem": 0.20,
+            "solution": 0.35,
+            "proof": 0.15,
+            "cta": 0.15
+        }
+    },
+    "asset_types": [
+        "product",
+        "logo",
+        "background",
+        "actor"
+    ],
+    "prompts": {
+        "context_analyzer": {
+            "role": "context_analyzer",
+            "task": "Analyser la campagne publicitaire et extraire les éléments clés",
+            "input_keys": [
+                "title",
+                "pitch",
+                "brand",
+                "product",
+                "duration_seconds",
+                "detected_tags"
+            ],
+            "output_schema": {
+                "brand_name": "string",
+                "product_name": "string",
+                "visual_style": "string",
+                "tone": "string",
+                "target_duration_seconds": "number",
+                "suggested_scene_count": "number",
+                "key_message": "string",
+                "value_proposition": "string",
+                "emotional_hook": "string",
+                "call_to_action": "string",
+                "target_audience": "string"
+            }
+        },
+        "scene_planner": {
+            "role": "scene_planner",
+            "task": "Planifier les scènes avec structure publicitaire AIDA",
+            "scene_types": [
+                "hook",
+                "problem",
+                "solution",
+                "proof",
+                "cta"
+            ],
+            "output_schema": {
+                "scene_plan": [
+                    {
+                        "index": "number",
+                        "type": "string",
+                        "title_suggestion": "string",
+                        "duration_seconds": "number",
+                        "purpose": "string",
+                        "key_message": "string"
+                    }
+                ],
+                "total_duration_seconds": "number"
+            }
+        },
+        "asset_reconciler": {
+            "role": "asset_reconciler",
+            "task": "Identifier les éléments visuels pour la pub",
+            "asset_categories": {
+                "products": "Produits à montrer",
+                "logos": "Logos et branding",
+                "backgrounds": "Décors et ambiances",
+                "actors": "Personnages/acteurs"
+            }
+        },
+        "screenwriter": {
+            "role": "screenwriter",
+            "task": "Écrire le script publicitaire",
+            "output_schema": {
+                "scenes": [
+                    {
+                        "index": "number",
+                        "title": "string",
+                        "summary": "string",
+                        "duration_seconds": "number",
+                        "voiceover": "string",
+                        "on_screen_text": "string",
+                        "visual_focus": "string"
+                    }
+                ]
+            }
+        }
+    },
+    "ai_questions": {
+        "hints": "Demande le produit/service, le message clé, le call-to-action, la plateforme",
+        "avoid": [
+            "C'est quoi votre pub?"
+        ],
+        "focus": [
+            "produit",
+            "message",
+            "cible",
+            "émotion",
+            "action souhaitée"
+        ]
+    }
+}

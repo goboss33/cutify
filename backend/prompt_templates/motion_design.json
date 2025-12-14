@@ -1,0 +1,85 @@
+{
+    "type": "motion_design",
+    "name": "Motion Design",
+    "description": "Motion graphics, animations graphiques, intros",
+    "required_inputs": {
+        "title": "Titre du projet",
+        "pitch": "Concept et message",
+        "duration_seconds": "Durée"
+    },
+    "optional_inputs": {
+        "visual_style": "Style graphique",
+        "brand_colors": "Couleurs de marque",
+        "typography": "Typographie"
+    },
+    "context_extraction": {
+        "visual_elements": "Éléments graphiques",
+        "animation_style": "Style d'animation",
+        "transitions": "Types de transitions"
+    },
+    "scene_structure": {
+        "types": [
+            "intro_animation",
+            "main_content",
+            "transition",
+            "outro_animation"
+        ],
+        "distribution": {
+            "intro_animation": 0.20,
+            "main_content": 0.50,
+            "transition": 0.10,
+            "outro_animation": 0.20
+        }
+    },
+    "asset_types": [
+        "shape",
+        "typography",
+        "icon",
+        "logo"
+    ],
+    "prompts": {
+        "context_analyzer": {
+            "role": "context_analyzer",
+            "task": "Analyser le brief motion design",
+            "output_schema": {
+                "visual_style": "string",
+                "animation_style": "string",
+                "color_scheme": "string",
+                "target_duration_seconds": "number",
+                "suggested_scene_count": "number"
+            }
+        },
+        "scene_planner": {
+            "role": "scene_planner",
+            "task": "Planifier les séquences d'animation",
+            "scene_types": [
+                "intro_animation",
+                "main_content",
+                "transition",
+                "outro_animation"
+            ]
+        },
+        "asset_reconciler": {
+            "role": "asset_reconciler",
+            "task": "Identifier les éléments graphiques",
+            "asset_categories": {
+                "shapes": "Formes géométriques",
+                "typography": "Éléments typographiques",
+                "icons": "Icônes et symboles"
+            }
+        },
+        "screenwriter": {
+            "role": "motion_director",
+            "task": "Décrire les animations et transitions"
+        }
+    },
+    "ai_questions": {
+        "hints": "Demande le style graphique, les couleurs, le rythme",
+        "focus": [
+            "style",
+            "couleurs",
+            "animation",
+            "message"
+        ]
+    }
+}

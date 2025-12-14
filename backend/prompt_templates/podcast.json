@@ -1,0 +1,81 @@
+{
+    "type": "podcast",
+    "name": "Podcast / Talk",
+    "description": "Extraits de podcast, interviews, talks",
+    "required_inputs": {
+        "title": "Titre de l'épisode ou extrait",
+        "pitch": "Sujet principal",
+        "duration_seconds": "Durée"
+    },
+    "optional_inputs": {
+        "speakers": "Intervenants",
+        "visual_style": "Style visuel"
+    },
+    "context_extraction": {
+        "topic": "Sujet de discussion",
+        "key_quotes": "Citations clés",
+        "emotions": "Émotions principales"
+    },
+    "scene_structure": {
+        "types": [
+            "hook",
+            "context",
+            "insight",
+            "takeaway"
+        ],
+        "distribution": {
+            "hook": 0.15,
+            "context": 0.25,
+            "insight": 0.40,
+            "takeaway": 0.20
+        }
+    },
+    "asset_types": [
+        "text_overlay",
+        "speaker_visual",
+        "background"
+    ],
+    "prompts": {
+        "context_analyzer": {
+            "role": "context_analyzer",
+            "task": "Analyser le contenu du podcast",
+            "output_schema": {
+                "visual_style": "string",
+                "topic": "string",
+                "target_duration_seconds": "number",
+                "suggested_scene_count": "number",
+                "key_messages": "array"
+            }
+        },
+        "scene_planner": {
+            "role": "scene_planner",
+            "task": "Planifier les moments clés de l'extrait",
+            "scene_types": [
+                "hook",
+                "context",
+                "insight",
+                "takeaway"
+            ]
+        },
+        "asset_reconciler": {
+            "role": "asset_reconciler",
+            "task": "Identifier les éléments visuels",
+            "asset_categories": {
+                "text_overlays": "Textes et citations à l'écran",
+                "backgrounds": "Arrière-plans"
+            }
+        },
+        "screenwriter": {
+            "role": "screenwriter",
+            "task": "Créer les séquences visuelles pour l'audio"
+        }
+    },
+    "ai_questions": {
+        "hints": "Demande le message clé, le public cible, le ton",
+        "focus": [
+            "message",
+            "émotion",
+            "audience"
+        ]
+    }
+}

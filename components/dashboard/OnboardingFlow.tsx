@@ -117,6 +117,7 @@ export function OnboardingFlow({ preset, onBack, onProjectCreated }: OnboardingF
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    title,
                     pitch,
                     category_slug: preset.slug,
                     detected_tags: detectedTags,

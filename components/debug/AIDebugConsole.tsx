@@ -28,7 +28,7 @@ const API_BASE = "http://localhost:8000";
 
 // Helper function to render prompt with highlighting
 // RAW mode: Shows template with {{placeholders}} highlighted in orange
-// PAYLOAD mode: Shows interpolated prompt with dynamic values highlighted in green
+// PAYLOAD mode: Shows interpolated prompt - only highlight values that replaced {{placeholders}}
 function renderHighlightedPrompt(
     promptPayload: string,
     promptTemplate: string | undefined,
@@ -58,27 +58,66 @@ function renderHighlightedPrompt(
                 </span>
             );
         });
-    } else {
-        // PAYLOAD MODE: Display interpolated prompt with dynamic values highlighted
-        // We detect values by comparing with template or by matching known patterns
-        const lines = promptPayload.split('\n');
-        return lines.map((line, idx) => {
-            // Match pattern: LABEL: value (where value is dynamic data)
-            const match = line.match(/^(\s*)(PROJECT TITLE:|GENRE:|PITCH:|VISUAL STYLE:|Title:|Genre:|Visual Style:|User:)\s*(.*)$/i);
+    } else if (mode === "payload" && promptTemplate) {
+        // PAYLOAD MODE with template: Compare line by line
+        const templateLines = promptTemplate.split('\n');
+        const payloadLines = promptPayload.split('\n');
 
-            if (match) {
-                const [, indent, label, value] = match;
-                return (
-                    <span key={idx}>
-                        {indent}{label}{" "}
-                        {value && <span className="bg-green-500/30 text-green-400 px-1 rounded font-semibold">{value}</span>}
-                        {"\n"}
-                    </span>
-                );
+        return payloadLines.map((payloadLine, idx) => {
+            const templateLine = templateLines[idx] || "";
+
+            // Check if template line contains {{placeholders}}
+            if (templateLine.includes("{{")) {
+                // Extract static parts from template (everything except placeholders)
+                const staticParts = templateLine.split(/\{\{[^}]+\}\}/g).filter(p => p.length > 0);
+
+                // Find the interpolated values in the payload line
+                let result: React.ReactNode[] = [];
+                let remaining = payloadLine;
+                let partIndex = 0;
+
+                for (const staticPart of staticParts) {
+                    const staticIdx = remaining.indexOf(staticPart);
+
+                    if (staticIdx > 0) {
+                        // Part before static = interpolated value
+                        const interpolated = remaining.slice(0, staticIdx);
+                        result.push(
+                            <span key={`val-${partIndex}`} className="bg-green-500/30 text-green-400 px-0.5 rounded">
+                                {interpolated}
+                            </span>
+                        );
+                    } else if (staticIdx === -1) {
+                        // Static part not found, line changed completely
+                        return <span key={idx} className="bg-green-500/30 text-green-400 px-0.5 rounded">{payloadLine}{"\n"}</span>;
+                    }
+
+                    // Add the static part as-is
+                    result.push(<span key={`static-${partIndex}`}>{staticPart}</span>);
+                    remaining = remaining.slice(staticIdx + staticPart.length);
+                    partIndex++;
+                }
+
+                // Any remaining text is an interpolated value at the end
+                if (remaining.length > 0) {
+                    result.push(
+                        <span key={`val-end`} className="bg-green-500/30 text-green-400 px-0.5 rounded">
+                            {remaining}
+                        </span>
+                    );
+                }
+
+                return <span key={idx}>{result}{"\n"}</span>;
             }
 
-            return <span key={idx}>{line}{"\n"}</span>;
+            // No placeholders in template - show as-is
+            return <span key={idx}>{payloadLine}{"\n"}</span>;
         });
+    } else {
+        // No template available - just show payload without highlighting
+        return promptPayload.split('\n').map((line, idx) => (
+            <span key={idx}>{line}{"\n"}</span>
+        ));
     }
 }
 

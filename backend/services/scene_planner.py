@@ -20,17 +20,9 @@ async def plan_scenes(
 ) -> list:
     """
     Creates a detailed scene plan with exact durations.
-    
-    Args:
-        context: Output from context_analyzer
-        narrative_template: Template from category preset (optional)
-    
-    Returns:
-        List of scene plans with durations
     """
     
     # Extract context values
-    title = context.get("key_narrative_elements", [])
     visual_style = context.get("fused_visual_style", "Cinematic")
     tone = context.get("tone", "Neutre")
     pacing = context.get("pacing", "Modéré")
@@ -38,95 +30,80 @@ async def plan_scenes(
     suggested_count = context.get("suggested_scene_count", 4)
     narrative_arc = context.get("narrative_arc_type", "standard")
     audience = context.get("target_audience", "Grand public")
+    key_elements = context.get("key_narrative_elements", [])
     
     # Build narrative structure string
-    structure_str = "Pas de template"
+    structure_str = "Pas de template spécifique"
     if narrative_template:
         structure = narrative_template.get("structure", [])
         if structure:
             parts = []
             for s in structure:
-                parts.append(f"{s.get('type', 'scene')} (~{s.get('duration', 10)}s): {s.get('description', '')}")
-            structure_str = "\n    ".join(parts)
+                parts.append(f"- {s.get('type', 'scene')}: {s.get('description', '')}")
+            structure_str = "\n".join(parts)
+    
+    elements_str = ", ".join(key_elements) if key_elements else "Non spécifiés"
     
     # Template with placeholders for RAW view
-    prompt_template = """{
-  "role": "scene_planner",
-  "task": "Planifier les scènes avec durées exactes pour respecter la durée cible",
-  
-  "context": {
-    "visual_style": "{{visual_style}}",
-    "tone": "{{tone}}",
-    "pacing": "{{pacing}}",
-    "target_duration_seconds": {{target_duration}},
-    "suggested_scene_count": {{suggested_count}},
-    "narrative_arc_type": "{{narrative_arc}}",
-    "target_audience": "{{audience}}"
-  },
-  
-  "narrative_template": "{{structure_str}}",
-  
-  "constraints": {
-    "total_duration_must_equal": {{target_duration}},
-    "tolerance_percent": 5,
-    "min_scene_duration": 5,
-    "max_scene_duration": 30
-  },
-  
-  "output_required": {
-    "scene_plan": [
-      {
-        "index": 1,
-        "type": "setup|conflict|resolution|hook|content|cta|etc",
-        "title_suggestion": "string - Titre suggéré pour cette scène",
-        "duration_seconds": "number - Durée exacte",
-        "purpose": "string - But narratif de cette scène",
-        "key_action": "string - Action principale"
-      }
-    ],
-    "total_duration_seconds": "number - Somme des durées (doit = target)",
-    "pacing_notes": "string - Notes sur le rythme"
-  }
+    prompt_template = """Planifie les scènes pour cette vidéo.
+
+CONTEXTE:
+- Style: {{visual_style}}
+- Ton: {{tone}}
+- Rythme: {{pacing}}
+- Durée TOTALE: {{target_duration}} secondes
+- Nombre de scènes suggéré: {{suggested_count}}
+- Arc narratif: {{narrative_arc}}
+- Public: {{audience}}
+- Éléments clés: {{elements_str}}
+
+TEMPLATE NARRATIF:
+{{structure_str}}
+
+CONTRAINTES STRICTES:
+- La somme des durées DOIT égaler EXACTEMENT {{target_duration}} secondes
+- Minimum 5 secondes par scène, maximum 45 secondes
+- Chaque scène doit avoir un but clair
+
+GÉNÈRE UN TABLEAU DE SCÈNES CONCRET:
+{
+  "scene_plan": [
+    {"index": 1, "type": "setup", "title_suggestion": "Titre", "duration_seconds": 20, "purpose": "But", "key_action": "Action"},
+    ...
+  ],
+  "total_duration_seconds": DOIT_ÉGALER_{{target_duration}},
+  "pacing_notes": "Notes sur le rythme"
 }"""
 
-    # Interpolated prompt for actual API call
-    prompt = f"""{{
-  "role": "scene_planner",
-  "task": "Planifier les scènes avec durées exactes pour respecter la durée cible",
-  
-  "context": {{
-    "visual_style": "{visual_style}",
-    "tone": "{tone}",
-    "pacing": "{pacing}",
-    "target_duration_seconds": {target_duration},
-    "suggested_scene_count": {suggested_count},
-    "narrative_arc_type": "{narrative_arc}",
-    "target_audience": "{audience}"
-  }},
-  
-  "narrative_template": "{structure_str}",
-  
-  "constraints": {{
-    "total_duration_must_equal": {target_duration},
-    "tolerance_percent": 5,
-    "min_scene_duration": 5,
-    "max_scene_duration": 30
-  }},
-  
-  "output_required": {{
-    "scene_plan": [
-      {{
-        "index": 1,
-        "type": "setup|conflict|resolution|hook|content|cta|etc",
-        "title_suggestion": "string - Titre suggéré pour cette scène",
-        "duration_seconds": "number - Durée exacte",
-        "purpose": "string - But narratif de cette scène",
-        "key_action": "string - Action principale"
-      }}
-    ],
-    "total_duration_seconds": "number - Somme des durées (doit = target)",
-    "pacing_notes": "string - Notes sur le rythme"
-  }}
+    # Interpolated prompt
+    prompt = f"""Planifie les scènes pour cette vidéo.
+
+CONTEXTE:
+- Style: {visual_style}
+- Ton: {tone}
+- Rythme: {pacing}
+- Durée TOTALE: {target_duration} secondes
+- Nombre de scènes suggéré: {suggested_count}
+- Arc narratif: {narrative_arc}
+- Public: {audience}
+- Éléments clés: {elements_str}
+
+TEMPLATE NARRATIF:
+{structure_str}
+
+CONTRAINTES STRICTES:
+- La somme des durées DOIT égaler EXACTEMENT {target_duration} secondes
+- Minimum 5 secondes par scène, maximum 45 secondes
+- Chaque scène doit avoir un but clair
+
+GÉNÈRE UN TABLEAU DE SCÈNES CONCRET:
+{{
+  "scene_plan": [
+    {{"index": 1, "type": "setup", "title_suggestion": "Titre", "duration_seconds": 20, "purpose": "But", "key_action": "Action"}},
+    ...
+  ],
+  "total_duration_seconds": DOIT_ÉGALER_{target_duration},
+  "pacing_notes": "Notes sur le rythme"
 }}"""
 
     try:
@@ -147,16 +124,21 @@ async def plan_scenes(
 
     except Exception as e:
         print(f"Error in scene planner: {e}")
-        # Fallback: simple equal distribution
-        scene_duration = target_duration // suggested_count
-        return [
-            {
+        # Fallback: distribute duration across scenes
+        scene_count = max(3, target_duration // 20)
+        base_duration = target_duration // scene_count
+        remainder = target_duration % scene_count
+        
+        plan = []
+        for i in range(scene_count):
+            duration = base_duration + (1 if i < remainder else 0)
+            scene_type = "setup" if i == 0 else ("resolution" if i == scene_count - 1 else "conflict")
+            plan.append({
                 "index": i + 1,
-                "type": "scene",
+                "type": scene_type,
                 "title_suggestion": f"Scène {i + 1}",
-                "duration_seconds": scene_duration,
+                "duration_seconds": duration,
                 "purpose": "À définir",
                 "key_action": "À définir"
-            }
-            for i in range(suggested_count)
-        ]
+            })
+        return plan

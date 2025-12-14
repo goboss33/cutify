@@ -1,0 +1,133 @@
+{
+    "type": "cinematic",
+    "name": "Cinematic / Short Film",
+    "description": "Films narratifs, fables, histoires avec arc dramatique",
+    "required_inputs": {
+        "title": "Titre du projet",
+        "pitch": "Description de l'histoire",
+        "visual_style": "Style visuel (Ghibli, Pixar, Minecraft, etc.)",
+        "tone": "Ton de l'histoire",
+        "duration_seconds": "Durée cible en secondes"
+    },
+    "optional_inputs": {
+        "target_audience": "Public cible",
+        "language": "Langue"
+    },
+    "context_extraction": {
+        "characters": "Personnages principaux et secondaires",
+        "locations": "Lieux de l'histoire",
+        "narrative_arc": "Type d'arc narratif (fable, héros, tragédie)",
+        "mood": "Ambiance générale",
+        "themes": "Thèmes principaux"
+    },
+    "scene_structure": {
+        "types": [
+            "setup",
+            "conflict",
+            "rising_action",
+            "climax",
+            "resolution"
+        ],
+        "distribution": {
+            "setup": 0.20,
+            "conflict": 0.35,
+            "climax": 0.25,
+            "resolution": 0.20
+        }
+    },
+    "asset_types": [
+        "character",
+        "location"
+    ],
+    "prompts": {
+        "context_analyzer": {
+            "role": "context_analyzer",
+            "task": "Analyser le projet cinématique et extraire le contexte narratif",
+            "input_keys": [
+                "title",
+                "pitch",
+                "visual_style",
+                "duration_seconds",
+                "detected_tags",
+                "user_answers"
+            ],
+            "output_schema": {
+                "fused_visual_style": "string",
+                "tone": "string",
+                "pacing": "string",
+                "language": "string",
+                "target_duration_seconds": "number",
+                "suggested_scene_count": "number",
+                "key_narrative_elements": "array",
+                "characters_detected": "array",
+                "locations_detected": "array",
+                "narrative_arc_type": "string",
+                "target_audience": "string",
+                "mood": "string"
+            }
+        },
+        "scene_planner": {
+            "role": "scene_planner",
+            "task": "Planifier les scènes avec un arc narratif cinématique",
+            "scene_types": [
+                "setup",
+                "conflict",
+                "climax",
+                "resolution"
+            ],
+            "output_schema": {
+                "scene_plan": [
+                    {
+                        "index": "number",
+                        "type": "string",
+                        "title_suggestion": "string",
+                        "duration_seconds": "number",
+                        "purpose": "string",
+                        "key_action": "string",
+                        "emotion": "string"
+                    }
+                ],
+                "total_duration_seconds": "number"
+            }
+        },
+        "asset_reconciler": {
+            "role": "asset_reconciler",
+            "task": "Identifier personnages et lieux pour le film",
+            "asset_categories": {
+                "characters": "Personnages avec rôle narratif",
+                "locations": "Lieux de l'histoire"
+            }
+        },
+        "screenwriter": {
+            "role": "screenwriter",
+            "task": "Écrire les scènes détaillées du film",
+            "output_schema": {
+                "scenes": [
+                    {
+                        "index": "number",
+                        "title": "string",
+                        "summary": "string (2-3 phrases)",
+                        "duration_seconds": "number",
+                        "character_names": "array",
+                        "location_name": "string",
+                        "dialogue_hint": "string",
+                        "visual_direction": "string"
+                    }
+                ]
+            }
+        }
+    },
+    "ai_questions": {
+        "hints": "Demande l'ambiance émotionnelle, le public cible, le style narratif",
+        "avoid": [
+            "Quels personnages?",
+            "Quelle histoire?"
+        ],
+        "focus": [
+            "ambiance",
+            "émotion",
+            "public cible",
+            "fin souhaitée"
+        ]
+    }
+}

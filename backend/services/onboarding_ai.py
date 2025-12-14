@@ -69,6 +69,7 @@ Ne génère que 4-8 tags maximum, les plus pertinents uniquement."""
 
 
 async def generate_questions(
+    title: str,
     pitch: str,
     category_slug: str,
     detected_tags: list,
@@ -88,7 +89,7 @@ async def generate_questions(
     category_hints = {
         "advertising": "Demande des précisions sur le produit, la marque, le message clé, et le call-to-action.",
         "social_content": "Demande le hook principal, le format préféré, et le style de contenu.",
-        "cinematic": "Demande le genre, l'ambiance, et les personnages principaux.",
+        "cinematic": "Demande l'ambiance émotionnelle et le public cible.",
         "music": "Demande l'artiste, le mood du clip, et le style visuel souhaité.",
         "podcast": "Demande le sujet principal et le format (interview, solo, etc.).",
         "tutorial": "Demande le niveau de l'audience et les points clés à couvrir.",
@@ -97,8 +98,9 @@ async def generate_questions(
 
     hint = category_hints.get(category_slug, "Pose des questions pertinentes pour ce type de projet.")
 
-    prompt = f"""Tu es un assistant de pré-production vidéo. Génère 2-3 questions de suivi pour mieux comprendre le projet.
+    prompt = f"""Tu es un assistant de pré-production vidéo intelligent. Génère 2-3 questions de suivi pertinentes.
 
+TITRE DU PROJET: "{title}"
 CATÉGORIE: {category_slug}
 PITCH: "{pitch}"
 TAGS DÉTECTÉS: {tags_str}
@@ -106,11 +108,14 @@ TAGS DÉTECTÉS: {tags_str}
 
 DIRECTIVE: {hint}
 
-Règles:
+RÈGLES STRICTES:
 - Maximum 3 questions
 - Questions courtes et directes
-- Évite les questions dont la réponse est déjà dans le pitch
-- Chaque question doit avoir un ID unique
+- NE DEMANDE JAMAIS ce qui est déjà évident dans le titre ou le pitch !
+  → Le titre "{title}" indique clairement le sujet, ne redemande pas "quelle fable" ou "quels personnages"
+- Si le titre contient le nom d'une fable/histoire connue, ne demande pas laquelle
+- Si le pitch mentionne des personnages, ne demande pas lesquels
+- Focus sur ce qui manque VRAIMENT: ambiance, public cible, style visuel, émotion souhaitée
 
 Réponds UNIQUEMENT en JSON valide:
 {{

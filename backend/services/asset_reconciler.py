@@ -1,7 +1,7 @@
 """
-Asset Reconciler Service (formerly Casting Director)
+Asset Reconciler Service
 Intelligently matches existing assets to narrative roles with fuzzy matching.
-NO duplicates: uses existing assets when confidence > 0.7
+Creates missing assets (characters, locations) when needed.
 """
 import json
 import google.generativeai as genai
@@ -20,29 +20,17 @@ async def reconcile_assets(
     existing_assets: list
 ) -> dict:
     """
-    Matches existing assets to narrative roles. Returns action plan (USE/CREATE/SKIP).
-    
-    Args:
-        context: Output from context_analyzer
-        existing_assets: List of existing characters and locations
-        
-    Returns:
-        {
-            "character_plan": [...],
-            "location_plan": [...],
-            "object_plan": [...]
-        }
+    Matches existing assets to narrative roles. Returns action plan (USE/CREATE).
     """
     
     # Extract context
-    title = context.get("key_narrative_elements", [])
     visual_style = context.get("fused_visual_style", "Cinematic")
-    narrative_elements = context.get("key_narrative_elements", [])
     narrative_arc = context.get("narrative_arc_type", "standard")
+    key_elements = context.get("key_narrative_elements", [])
     language = context.get("language", "French")
     
     # Build existing assets string
-    assets_str = "Aucun asset existant"
+    assets_str = "AUCUN ASSET EXISTANT"
     if existing_assets:
         assets_list = []
         for a in existing_assets:
@@ -50,91 +38,64 @@ async def reconcile_assets(
             name = a.get("name", "Unnamed")
             desc = a.get("description", "") or "Pas de description"
             asset_id = a.get("id", 0)
-            assets_list.append(f'{{ "id": {asset_id}, "type": "{asset_type}", "name": "{name}", "description": "{desc[:100]}" }}')
-        assets_str = ",\n      ".join(assets_list)
+            assets_list.append(f"- ID:{asset_id} [{asset_type}] \"{name}\": {desc[:80]}")
+        assets_str = "\n".join(assets_list)
     
-    elements_str = ", ".join(narrative_elements) if narrative_elements else "Non définis"
+    elements_str = ", ".join(key_elements) if key_elements else "Non spécifiés"
     
     # Template with placeholders for RAW view
-    prompt_template = """{
-  "role": "asset_reconciler",
-  "task": "Identifier les assets nécessaires et matcher avec les existants. ANTI-DOUBLONS.",
-  
-  "context": {
-    "visual_style": "{{visual_style}}",
-    "narrative_arc": "{{narrative_arc}}",
-    "language": "{{language}}",
-    "key_elements": "{{elements_str}}"
-  },
-  
-  "existing_assets": [
-    {{assets_str}}
+    prompt_template = """Identifie les personnages et lieux nécessaires pour cette histoire.
+
+CONTEXTE:
+- Éléments narratifs: {{elements_str}}
+- Style visuel: {{visual_style}}
+- Arc: {{narrative_arc}}
+
+ASSETS EXISTANTS:
+{{assets_str}}
+
+TÂCHE:
+1. Liste TOUS les personnages nécessaires pour l'histoire
+2. Liste TOUS les lieux nécessaires
+3. Pour chaque, indique: USE (si asset existe) ou CREATE (si à créer)
+
+RÉPONDS AVEC DES VALEURS CONCRÈTES:
+{
+  "character_plan": [
+    {"role_name": "Nom du personnage", "action": "CREATE", "create_prompt": "Description visuelle style {{visual_style}}"}
   ],
-  
-  "rules": {
-    "fuzzy_matching": "Même si les noms diffèrent légèrement (Renard/renard/Fox), considère comme match si même concept",
-    "confidence_threshold": 0.7,
-    "action_USE": "Si confidence >= 0.7, utiliser l'asset existant",
-    "action_CREATE": "Si aucun match ou confidence < 0.7, créer un nouvel asset", 
-    "action_SKIP": "Si l'élément n'est pas essentiel pour l'histoire",
-    "no_duplicates": "JAMAIS créer un asset si un similaire existe"
-  },
-  
-  "output_required": {
-    "character_plan": [
-      {
-        "role_name": "string - Nom du rôle narratif",
-        "action": "USE | CREATE | SKIP",
-        "existing_asset_id": "number | null - ID si action=USE",
-        "existing_asset_name": "string | null - Nom exact de l'asset existant",
-        "match_confidence": "number 0-1",
-        "create_prompt": "string | null - Prompt si action=CREATE, style {{visual_style}}"
-      }
-    ],
-    "location_plan": [...],
-    "object_plan": [...]
-  }
+  "location_plan": [
+    {"role_name": "Nom du lieu", "action": "CREATE", "create_prompt": "Description visuelle style {{visual_style}}"}
+  ],
+  "object_plan": []
 }"""
 
     # Interpolated prompt
-    prompt = f"""{{
-  "role": "asset_reconciler",
-  "task": "Identifier les assets nécessaires et matcher avec les existants. ANTI-DOUBLONS.",
-  
-  "context": {{
-    "visual_style": "{visual_style}",
-    "narrative_arc": "{narrative_arc}",
-    "language": "{language}",
-    "key_elements": "{elements_str}"
-  }},
-  
-  "existing_assets": [
-    {assets_str}
+    prompt = f"""Identifie les personnages et lieux nécessaires pour cette histoire.
+
+CONTEXTE:
+- Éléments narratifs: {elements_str}
+- Style visuel: {visual_style}
+- Arc: {narrative_arc}
+
+ASSETS EXISTANTS:
+{assets_str}
+
+TÂCHE:
+1. Liste TOUS les personnages nécessaires pour l'histoire (ex: La Cigale, La Fourmi)
+2. Liste TOUS les lieux nécessaires (ex: Champ d'été, Maison de la fourmi)
+3. Pour chaque, indique: USE (si un asset existant correspond) ou CREATE (si à créer)
+
+RÉPONDS AVEC DES VALEURS CONCRÈTES (PAS de descriptions de champs):
+{{
+  "character_plan": [
+    {{"role_name": "La Cigale", "action": "CREATE", "create_prompt": "Une cigale joyeuse style {visual_style}"}},
+    {{"role_name": "La Fourmi", "action": "CREATE", "create_prompt": "Une fourmi travailleuse style {visual_style}"}}
   ],
-  
-  "rules": {{
-    "fuzzy_matching": "Même si les noms diffèrent légèrement (Renard/renard/Fox), considère comme match si même concept",
-    "confidence_threshold": 0.7,
-    "action_USE": "Si confidence >= 0.7, utiliser l'asset existant",
-    "action_CREATE": "Si aucun match ou confidence < 0.7, créer un nouvel asset", 
-    "action_SKIP": "Si l'élément n'est pas essentiel pour l'histoire",
-    "no_duplicates": "JAMAIS créer un asset si un similaire existe"
-  }},
-  
-  "output_required": {{
-    "character_plan": [
-      {{
-        "role_name": "string - Nom du rôle narratif",
-        "action": "USE | CREATE | SKIP",
-        "existing_asset_id": "number | null - ID si action=USE",
-        "existing_asset_name": "string | null - Nom exact de l'asset existant",
-        "match_confidence": "number 0-1",
-        "create_prompt": "string | null - Prompt si action=CREATE, style {visual_style}"
-      }}
-    ],
-    "location_plan": [...],
-    "object_plan": [...]
-  }}
+  "location_plan": [
+    {{"role_name": "Champ d'été", "action": "CREATE", "create_prompt": "Un champ ensoleillé style {visual_style}"}}
+  ],
+  "object_plan": []
 }}"""
 
     try:
@@ -154,9 +115,26 @@ async def reconcile_assets(
 
     except Exception as e:
         print(f"Error in asset reconciler: {e}")
+        # Fallback: extract from key_elements if available
+        characters = []
+        locations = []
+        
+        for elem in key_elements:
+            if any(word in elem.lower() for word in ["cigale", "fourmi", "renard", "corbeau", "loup", "agneau"]):
+                characters.append({
+                    "role_name": elem,
+                    "action": "CREATE",
+                    "create_prompt": f"{elem} style {visual_style}"
+                })
+        
+        if not characters:
+            characters = [
+                {"role_name": "Personnage principal", "action": "CREATE", "create_prompt": f"Personnage principal style {visual_style}"}
+            ]
+        
         return {
-            "character_plan": [],
-            "location_plan": [],
+            "character_plan": characters,
+            "location_plan": locations,
             "object_plan": [],
             "error": str(e)
         }
@@ -173,47 +151,51 @@ async def create_missing_assets(project_id: int, asset_plan: dict, db) -> dict:
     
     # Create characters
     for char in asset_plan.get("character_plan", []):
-        if char.get("action") == "CREATE":
-            name = char.get("role_name", "Unknown")
+        action = char.get("action", "").upper()
+        role_name = char.get("role_name", "Unknown")
+        
+        if action == "CREATE":
             prompt = char.get("create_prompt", "")
             
             new_char = CharacterDB(
                 project_id=project_id,
-                name=name,
+                name=role_name,
                 description=prompt,
                 traits=""
             )
             db.add(new_char)
             db.commit()
             db.refresh(new_char)
-            created_mapping[name] = {"type": "character", "id": new_char.id}
-        elif char.get("action") == "USE":
-            created_mapping[char.get("role_name")] = {
-                "type": "character",
-                "id": char.get("existing_asset_id"),
-                "name": char.get("existing_asset_name")
-            }
+            created_mapping[role_name] = {"type": "character", "id": new_char.id, "name": role_name}
+            
+        elif action == "USE":
+            existing_id = char.get("existing_asset_id")
+            existing_name = char.get("existing_asset_name", role_name)
+            if existing_id:
+                created_mapping[role_name] = {"type": "character", "id": existing_id, "name": existing_name}
     
     # Create locations
     for loc in asset_plan.get("location_plan", []):
-        if loc.get("action") == "CREATE":
-            name = loc.get("role_name", "Unknown")
+        action = loc.get("action", "").upper()
+        role_name = loc.get("role_name", "Unknown")
+        
+        if action == "CREATE":
             prompt = loc.get("create_prompt", "")
             
             new_loc = LocationDB(
                 project_id=project_id,
-                name=name,
+                name=role_name,
                 description=prompt
             )
             db.add(new_loc)
             db.commit()
             db.refresh(new_loc)
-            created_mapping[name] = {"type": "location", "id": new_loc.id}
-        elif loc.get("action") == "USE":
-            created_mapping[loc.get("role_name")] = {
-                "type": "location",
-                "id": loc.get("existing_asset_id"),
-                "name": loc.get("existing_asset_name")
-            }
+            created_mapping[role_name] = {"type": "location", "id": new_loc.id, "name": role_name}
+            
+        elif action == "USE":
+            existing_id = loc.get("existing_asset_id")
+            existing_name = loc.get("existing_asset_name", role_name)
+            if existing_id:
+                created_mapping[role_name] = {"type": "location", "id": existing_id, "name": existing_name}
     
     return created_mapping

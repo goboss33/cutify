@@ -38,78 +38,68 @@ async def analyze_context(
         for q_id, answer in ai_answers.items():
             answers_str += f"\n  - {answer}"
     else:
-        answers_str = "Aucune réponse"
+        answers_str = "Aucune"
     
     # Template with placeholders for RAW view (variables in orange)
-    prompt_template = """{
-  "role": "context_analyzer",
-  "task": "Fusionne intelligemment toutes les sources de contexte pour créer un brief unifié",
-  
-  "inputs": {
-    "project_title": "{{title}}",
-    "user_pitch": "{{pitch}}",
-    "preset_category": "{{preset_name}}",
-    "preset_visual_style": "{{preset_visual_style}}",
-    "preset_duration_seconds": {{preset_duration}},
-    "user_target_duration_seconds": {{target_duration_seconds}},
-    "detected_tags": "{{tags_str}}",
-    "user_answers": "{{answers_str}}"
-  },
-  
-  "fusion_rules": {
-    "visual_style": "Si le pitch contient un style explicite (ex: 'ghibli', 'pixar', 'noir et blanc'), FUSIONNER avec le preset, ne pas écraser. Format: 'Style1 + Style2'",
-    "tone": "Déduire du pitch et des tags. Ex: 'enfant' → ton enfantin, 'thriller' → ton sombre",
-    "language": "Détecter depuis le titre du projet",
-    "duration": "Utiliser user_target_duration_seconds si fourni, sinon preset_duration_seconds"
-  },
-  
-  "output_required": {
-    "fused_visual_style": "string - Style fusionné (pitch + preset)",
-    "tone": "string - Ton déduit",
-    "pacing": "string - Rythme adapté au type de contenu",
-    "language": "string - Langue détectée (French/English/etc)",
-    "target_duration_seconds": "number - Durée cible finale",
-    "suggested_scene_count": "number - Nombre de scènes recommandé (durée / ~15s par scène)",
-    "key_narrative_elements": "array - Éléments clés de l'histoire extraits du titre et pitch",
-    "narrative_arc_type": "string - Type d'arc narratif (fable, action, tutorial, etc)",
-    "target_audience": "string - Public cible déduit"
-  }
+    prompt_template = """Analyse le projet et génère un contexte fusionné.
+
+ENTRÉES:
+- Titre: "{{title}}"
+- Pitch: "{{pitch}}"
+- Preset: {{preset_name}} (style: {{preset_visual_style}})
+- Durée preset: {{preset_duration}}s
+- Durée demandée: {{target_duration_seconds}}s
+- Tags: {{tags_str}}
+- Réponses: {{answers_str}}
+
+RÈGLES DE FUSION:
+1. visual_style: Si le pitch mentionne un style (minecraft, ghibli, etc), FUSIONNER avec le preset. Ex: "Minecraft + Cinematic"
+2. tone: Déduire du pitch ("humoristique" → "Humoristique et léger")
+3. duration: Utiliser la durée demandée ({{target_duration_seconds}}s)
+4. scene_count: durée / 15s environ
+
+RÉPONDS UNIQUEMENT AVEC CES VALEURS CONCRÈTES (pas de descriptions):
+{
+  "fused_visual_style": "LE STYLE FUSIONNÉ ICI",
+  "tone": "LE TON DÉDUIT ICI",
+  "pacing": "LE RYTHME ICI",
+  "language": "French ou English",
+  "target_duration_seconds": NOMBRE_ENTIER,
+  "suggested_scene_count": NOMBRE_ENTIER,
+  "key_narrative_elements": ["élément1", "élément2"],
+  "narrative_arc_type": "fable/action/tutorial/etc",
+  "target_audience": "Public cible"
 }"""
 
-    # Interpolated prompt for actual API call (variables in green when displayed)
-    prompt = f"""{{
-  "role": "context_analyzer",
-  "task": "Fusionne intelligemment toutes les sources de contexte pour créer un brief unifié",
-  
-  "inputs": {{
-    "project_title": "{title}",
-    "user_pitch": "{pitch}",
-    "preset_category": "{preset_name}",
-    "preset_visual_style": "{preset_visual_style}",
-    "preset_duration_seconds": {preset_duration},
-    "user_target_duration_seconds": {target_duration_seconds},
-    "detected_tags": "{tags_str}",
-    "user_answers": "{answers_str}"
-  }},
-  
-  "fusion_rules": {{
-    "visual_style": "Si le pitch contient un style explicite (ex: 'ghibli', 'pixar', 'noir et blanc'), FUSIONNER avec le preset, ne pas écraser. Format: 'Style1 + Style2'",
-    "tone": "Déduire du pitch et des tags. Ex: 'enfant' → ton enfantin, 'thriller' → ton sombre",
-    "language": "Détecter depuis le titre du projet",
-    "duration": "Utiliser user_target_duration_seconds si fourni, sinon preset_duration_seconds"
-  }},
-  
-  "output_required": {{
-    "fused_visual_style": "string - Style fusionné (pitch + preset)",
-    "tone": "string - Ton déduit",
-    "pacing": "string - Rythme adapté au type de contenu",
-    "language": "string - Langue détectée (French/English/etc)",
-    "target_duration_seconds": "number - Durée cible finale",
-    "suggested_scene_count": "number - Nombre de scènes recommandé (durée / ~15s par scène)",
-    "key_narrative_elements": "array - Éléments clés de l'histoire extraits du titre et pitch",
-    "narrative_arc_type": "string - Type d'arc narratif (fable, action, tutorial, etc)",
-    "target_audience": "string - Public cible déduit"
-  }}
+    # Interpolated prompt for actual API call
+    prompt = f"""Analyse le projet et génère un contexte fusionné.
+
+ENTRÉES:
+- Titre: "{title}"
+- Pitch: "{pitch}"
+- Preset: {preset_name} (style: {preset_visual_style})
+- Durée preset: {preset_duration}s
+- Durée demandée: {target_duration_seconds}s
+- Tags: {tags_str}
+- Réponses: {answers_str}
+
+RÈGLES DE FUSION:
+1. visual_style: Si le pitch mentionne un style (minecraft, ghibli, etc), FUSIONNER avec le preset. Ex: "Minecraft + Cinematic"
+2. tone: Déduire du pitch ("humoristique" → "Humoristique et léger")
+3. duration: Utiliser la durée demandée ({target_duration_seconds}s)
+4. scene_count: durée / 15s environ
+
+RÉPONDS UNIQUEMENT AVEC CES VALEURS CONCRÈTES (pas de descriptions):
+{{
+  "fused_visual_style": "LE STYLE FUSIONNÉ ICI",
+  "tone": "LE TON DÉDUIT ICI",
+  "pacing": "LE RYTHME ICI",
+  "language": "French ou English",
+  "target_duration_seconds": NOMBRE_ENTIER,
+  "suggested_scene_count": NOMBRE_ENTIER,
+  "key_narrative_elements": ["élément1", "élément2"],
+  "narrative_arc_type": "fable/action/tutorial/etc",
+  "target_audience": "Public cible"
 }}"""
 
     try:
@@ -129,16 +119,22 @@ async def analyze_context(
 
     except Exception as e:
         print(f"Error in context analyzer: {e}")
-        # Fallback to basic fusion
+        # Fallback with detected values
+        fused_style = preset_visual_style or "Cinematic"
+        if "minecraft" in pitch.lower():
+            fused_style = f"Minecraft + {fused_style}"
+        elif "ghibli" in pitch.lower():
+            fused_style = f"Ghibli + {fused_style}"
+            
         return {
-            "fused_visual_style": f"{pitch} + {preset_visual_style}" if preset_visual_style else pitch,
-            "tone": "Neutre",
+            "fused_visual_style": fused_style,
+            "tone": "Humoristique" if "humoristique" in pitch.lower() else "Neutre",
             "pacing": "Modéré",
             "language": "French",
-            "target_duration_seconds": target_duration_seconds or preset_duration or 60,
-            "suggested_scene_count": max(3, (target_duration_seconds or 60) // 15),
-            "key_narrative_elements": [],
-            "narrative_arc_type": "standard",
+            "target_duration_seconds": target_duration_seconds,
+            "suggested_scene_count": max(3, target_duration_seconds // 15),
+            "key_narrative_elements": [title],
+            "narrative_arc_type": "fable" if "fable" in pitch.lower() else "standard",
             "target_audience": "Grand public",
             "error": str(e)
         }
