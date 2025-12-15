@@ -1104,35 +1104,6 @@ export default function TemplateEditorPage() {
                                                         </div>
                                                     </div>
 
-                                                    {/* Available Variables from previous services */}
-                                                    {getAvailableVariables().length > 0 && (
-                                                        <div className="p-2 border-b border-white/10 bg-black/20">
-                                                            <p className="text-xs text-white/60 mb-1">Variables des services précédents (cliquez pour insérer)</p>
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {getAvailableVariables().map(varName => (
-                                                                    <Badge
-                                                                        key={varName}
-                                                                        variant="outline"
-                                                                        className="text-xs cursor-pointer bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20"
-                                                                        onClick={() => {
-                                                                            setSchemaEditorContent(prev => {
-                                                                                try {
-                                                                                    const parsed = JSON.parse(prev)
-                                                                                    parsed[varName] = "..."
-                                                                                    return JSON.stringify(parsed, null, 2)
-                                                                                } catch {
-                                                                                    return prev
-                                                                                }
-                                                                            })
-                                                                        }}
-                                                                    >
-                                                                        {varName}
-                                                                    </Badge>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
                                                     {/* Schema JSON Editor */}
                                                     <div className="flex-1 p-1">
                                                         <Editor
