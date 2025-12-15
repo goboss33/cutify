@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCcw, Trash2, Terminal, Image as ImageIcon, MessageSquare, Code, FileJson, ArrowLeft, Settings } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RefreshCcw, Trash2, Terminal, Image as ImageIcon, MessageSquare, Code, FileJson, ArrowLeft, Settings, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/store/ProjectContext";
+import { Project } from "@/lib/mockData";
+import { createClient } from "@/lib/supabase/client";
 
 // Types matching backend/services/ai_logger.py
 interface AILog {
@@ -130,9 +133,59 @@ export function AIDebugConsole() {
     const scrollRef = useRef<HTMLDivElement>(null);
     const userHasSelectedRef = useRef(false); // Track if user manually selected a log
 
+    // Projects list for dropdown
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+
     // Get current project from context
-    const { currentProject } = useProject();
+    const { currentProject, setCurrentProject } = useProject();
     const router = useRouter();
+
+    // Fetch all projects for dropdown
+    useEffect(() => {
+        const fetchProjects = async () => {
+            try {
+                // Get Supabase session for auth token
+                const supabase = createClient();
+                const { data: { session } } = await supabase.auth.getSession();
+
+                if (!session?.access_token) {
+                    console.log("No session found, user might not be logged in");
+                    setIsLoadingProjects(false);
+                    return;
+                }
+
+                const res = await fetch(`${API_BASE}/api/projects`, {
+                    headers: {
+                        "Authorization": `Bearer ${session.access_token}`
+                    }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log("Loaded projects:", data);
+                    setProjects(data);
+                } else {
+                    console.error("Failed to fetch projects:", res.status, res.statusText);
+                }
+            } catch (e) {
+                console.error("Failed to fetch projects", e);
+            } finally {
+                setIsLoadingProjects(false);
+            }
+        };
+        fetchProjects();
+    }, []);
+
+    // Handle project selection from dropdown
+    const handleProjectChange = (projectId: string) => {
+        const project = projects.find(p => String(p.id) === projectId);
+        if (project) {
+            setCurrentProject(project);
+            setLogs([]);
+            setSelectedLogId(null);
+            userHasSelectedRef.current = false;
+        }
+    };
 
     const fetchLogs = async () => {
         // Only fetch if a project is selected
@@ -178,23 +231,6 @@ export function AIDebugConsole() {
 
     const selectedLog = logs.find(l => l.id === selectedLogId);
 
-    // Empty state when no project selected
-    if (!currentProject) {
-        return (
-            <div className="flex h-full w-full bg-background text-foreground items-center justify-center">
-                <div className="text-center space-y-4">
-                    <Terminal className="w-16 h-16 mx-auto text-muted-foreground/50" />
-                    <h2 className="text-2xl font-bold text-muted-foreground">Aucun projet sélectionné</h2>
-                    <p className="text-muted-foreground">Sélectionnez un projet pour voir les logs AI associés.</p>
-                    <Button onClick={() => router.push("/")} variant="outline">
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-                        Retour aux projets
-                    </Button>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="flex h-full w-full bg-background text-foreground overflow-hidden">
             {/* Sidebar List */}
@@ -213,17 +249,32 @@ export function AIDebugConsole() {
                     <div className="flex items-center justify-between">
                         <h2 className="font-bold flex items-center gap-2">
                             <Terminal className="w-4 h-4" /> AI Console
-                            <Badge variant="outline" className="text-xs">{currentProject.title}</Badge>
                         </h2>
                         <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={fetchLogs} disabled={isLoading}>
+                            <Button variant="ghost" size="icon" onClick={fetchLogs} disabled={isLoading || !currentProject}>
                                 <RefreshCcw className={cn("w-4 h-4", isLoading && "animate-spin")} />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={clearLogs}>
+                            <Button variant="ghost" size="icon" onClick={clearLogs} disabled={!currentProject}>
                                 <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
                         </div>
                     </div>
+                    {/* Project Selector Dropdown */}
+                    <Select
+                        value={currentProject?.id ? String(currentProject.id) : ""}
+                        onValueChange={handleProjectChange}
+                    >
+                        <SelectTrigger className="w-full bg-background/50 border-border">
+                            <SelectValue placeholder={isLoadingProjects ? "Chargement..." : "Sélectionner un projet"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {projects.map((project) => (
+                                <SelectItem key={project.id} value={String(project.id)}>
+                                    {project.title}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     {/* Template Editor Button */}
                     <Link href="/templates">
                         <Button variant="outline" size="sm" className="w-full mt-2 border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
@@ -392,8 +443,25 @@ export function AIDebugConsole() {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                        Select a log entry to view details
+                    <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4">
+                        <Terminal className="w-12 h-12 text-muted-foreground/30" />
+                        {currentProject ? (
+                            <>
+                                <p>Sélectionnez un log pour voir les détails</p>
+                                {logs.length === 0 && (
+                                    <p className="text-sm text-muted-foreground/60">
+                                        Aucun log AI pour ce projet. Lancez une génération pour voir les logs.
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-lg font-medium">Aucun projet sélectionné</p>
+                                <p className="text-sm text-muted-foreground/60">
+                                    Sélectionnez un projet dans la liste déroulante pour voir les logs AI.
+                                </p>
+                            </>
+                        )}
                     </div>
                 )
                 }
