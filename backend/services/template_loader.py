@@ -1,14 +1,22 @@
 """
-Template Loader Service V5.1
-Fixed: Clearer prompts that tell AI to FILL values, not echo schema.
+Template Loader Service V6
+Reads prompt templates from JSON files and interpolates variables.
+The Template Editor now controls the actual prompts sent to the AI.
 """
 import json
 import os
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "prompt_templates"
 _template_cache: dict = {}
+
+
+def clear_template_cache():
+    """Clear the template cache to reload templates from disk."""
+    global _template_cache
+    _template_cache = {}
 
 
 def load_template(video_type: str) -> Optional[dict]:
@@ -31,6 +39,56 @@ def load_template(video_type: str) -> Optional[dict]:
     except Exception as e:
         print(f"Error loading template {video_type}: {e}")
         return None
+
+
+def interpolate_template(template_str: str, variables: dict) -> Tuple[str, str]:
+    """
+    Interpolate a template string with variables.
+    
+    Takes a template with {{variable}} placeholders and a variables dict.
+    Returns a tuple of (prompt_template, prompt_payload):
+    - prompt_template: Original template with {{variable}} intact (for RAW mode)
+    - prompt_payload: Template with {{variable}} replaced by actual values (for AI)
+    
+    Example:
+        template = "Hello {{name}}, you are {{age}} years old."
+        variables = {"name": "Alice", "age": 30}
+        result = interpolate_template(template, variables)
+        # Returns:
+        # ("Hello {{name}}, you are {{age}} years old.",
+        #  "Hello Alice, you are 30 years old.")
+    """
+    # The template itself is already the RAW version with {{placeholders}}
+    prompt_template = template_str
+    
+    # Create the payload by replacing all {{variable}} with actual values
+    prompt_payload = template_str
+    
+    # Find all {{variable}} patterns
+    pattern = r'\{\{(\w+)\}\}'
+    
+    def replace_var(match):
+        var_name = match.group(1)
+        if var_name in variables:
+            value = variables[var_name]
+            # Handle different types
+            if isinstance(value, (list, dict)):
+                return json.dumps(value, ensure_ascii=False)
+            return str(value)
+        # If variable not found, leave placeholder as-is
+        return match.group(0)
+    
+    prompt_payload = re.sub(pattern, replace_var, prompt_payload)
+    
+    return prompt_template, prompt_payload
+
+
+def get_prompt_template(template: dict, prompt_name: str) -> Optional[str]:
+    """Get the template string for a specific prompt from the JSON template."""
+    prompts = template.get("prompts", {})
+    prompt_config = prompts.get(prompt_name, {})
+    return prompt_config.get("template")
+
 
 
 def get_all_templates() -> list[dict]:
@@ -112,188 +170,85 @@ def create_template(slug: str, data: dict) -> bool:
 
 def build_context_prompt(template: dict, inputs: dict) -> tuple[str, str]:
     """
-    Build context analyzer prompt - CLEAR instruction to fill values.
+    Build context analyzer prompt by reading from JSON template.
+    Returns: (prompt_template with {{placeholders}}, prompt_payload with values)
     """
-    video_type = template.get("type", "general")
+    # Get template string from JSON
+    template_str = get_prompt_template(template, "context_analyzer")
     
-    # Get values from inputs
-    title = inputs.get("title", "")
-    pitch = inputs.get("pitch", "")
-    visual_style = inputs.get("visual_style", "")
-    duration = inputs.get("duration_seconds", 60)
+    if not template_str:
+        # Fallback to hardcoded template if not found in JSON
+        print("Warning: context_analyzer template not found in JSON, using fallback")
+        template_str = "Tu es un analyste de contexte vidéo. Analyse ce projet."
+    
+    # Prepare all variables for interpolation
+    video_type = template.get("type", "general")
     tags = inputs.get("detected_tags", [])
     answers = inputs.get("user_answers", {})
-    language = inputs.get("language", "French")  # Get language from inputs
     
-    tags_str = ", ".join(tags) if tags else "Aucun"
-    answers_str = "\n".join([f"- {v}" for v in answers.values()]) if answers else "Aucune"
+    variables = {
+        "video_type": video_type,
+        "title": inputs.get("title", ""),
+        "pitch": inputs.get("pitch", ""),
+        "visual_style": inputs.get("visual_style", ""),
+        "duration": inputs.get("duration_seconds", 60),
+        "tags_str": ", ".join(tags) if tags else "Aucun",
+        "answers_str": "\n".join([f"- {v}" for v in answers.values()]) if answers else "Aucune",
+        "language": inputs.get("language", "French"),
+    }
     
-    prompt_template = f'''Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.
-
-TYPE DE VIDÉO: {video_type}
-
-ENTRÉES:
-- Titre: "{{{{title}}}}"
-- Pitch: "{{{{pitch}}}}"
-- Style visuel demandé: "{{{{visual_style}}}}"
-- Durée cible: {{{{duration}}}} secondes
-- Tags détectés: {{{{tags_str}}}}
-- Réponses utilisateur: {{{{answers_str}}}}
-- Langue: {{{{language}}}}
-
-INSTRUCTIONS:
-1. Analyse le pitch pour extraire les personnages, lieux, ton, etc.
-2. Fusionne le style visuel (pitch + demandé). Ex: si pitch dit "ghibli" et style="Cinematic" → "Ghibli + Cinematic"
-3. Calcule le nombre de scènes suggéré (durée / 15 secondes environ)
-
-RETOURNE CE JSON REMPLI (remplace les ... par des vraies valeurs):
-{{
-  "fused_visual_style": "...",
-  "tone": "...",
-  "pacing": "...",
-  "language": {{{{language}}}},
-  "target_duration_seconds": {{{{duration}}}},
-  "suggested_scene_count": ...,
-  "key_narrative_elements": ["...", "..."],
-  "characters_detected": ["...", "..."],
-  "locations_detected": ["...", "..."],
-  "narrative_arc_type": "...",
-  "target_audience": "...",
-  "mood": "..."
-}}'''
-
-    prompt_payload = f'''Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.
-
-TYPE DE VIDÉO: {video_type}
-
-ENTRÉES:
-- Titre: "{title}"
-- Pitch: "{pitch}"
-- Style visuel demandé: "{visual_style}"
-- Durée cible: {duration} secondes
-- Tags détectés: {tags_str}
-- Réponses utilisateur: {answers_str}
-- Langue: {language}
-
-INSTRUCTIONS:
-1. Analyse le pitch pour extraire les personnages, lieux, ton, etc.
-2. Fusionne le style visuel (pitch + demandé). Ex: si pitch dit "ghibli" et style="Cinematic" → "Ghibli + Cinematic"
-3. Calcule le nombre de scènes suggéré (durée / 15 secondes environ)
-
-RETOURNE CE JSON REMPLI (remplace les ... par des vraies valeurs):
-{{
-  "fused_visual_style": "...",
-  "tone": "...",
-  "pacing": "...",
-  "language": "{language}",
-  "target_duration_seconds": {duration},
-  "suggested_scene_count": ...,
-  "key_narrative_elements": ["...", "..."],
-  "characters_detected": ["...", "..."],
-  "locations_detected": ["...", "..."],
-  "narrative_arc_type": "...",
-  "target_audience": "...",
-  "mood": "..."
-}}'''
-
-    return prompt_template, prompt_payload
+    # Interpolate and return
+    return interpolate_template(template_str, variables)
 
 
 def build_scene_planner_prompt(template: dict, context: dict) -> tuple[str, str]:
     """
-    Build scene planner prompt with ACTUAL context values.
+    Build scene planner prompt by reading from JSON template.
     Returns: (prompt_template with {{placeholders}}, prompt_payload with values)
     """
-    video_type = template.get("type", "general")
+    # Get template string from JSON
+    template_str = get_prompt_template(template, "scene_planner")
+    
+    if not template_str:
+        print("Warning: scene_planner template not found in JSON, using fallback")
+        template_str = "Tu es un planificateur de scènes. Planifie les scènes."
+    
+    # Get scene types from template config
     structure = template.get("scene_structure", {})
     scene_types = structure.get("types", ["setup", "content", "conclusion"])
     
-    # Extract values from context
-    visual_style = context.get("fused_visual_style", "Cinematic")
-    tone = context.get("tone", "Neutre")
-    target_duration = context.get("target_duration_seconds", 60)
-    suggested_count = context.get("suggested_scene_count", 4)
+    # Prepare variables for interpolation
     characters = context.get("characters_detected", [])
     locations = context.get("locations_detected", [])
-    narrative_arc = context.get("narrative_arc_type", "standard")
     
-    chars_str = ", ".join(characters) if characters else "À définir"
-    locs_str = ", ".join(locations) if locations else "À définir"
-    scene_types_str = json.dumps(scene_types)
+    variables = {
+        "video_type": template.get("type", "general"),
+        "visual_style": context.get("fused_visual_style", "Cinematic"),
+        "tone": context.get("tone", "Neutre"),
+        "target_duration": context.get("target_duration_seconds", 60),
+        "suggested_count": context.get("suggested_scene_count", 4),
+        "chars_str": ", ".join(characters) if characters else "À définir",
+        "locs_str": ", ".join(locations) if locations else "À définir",
+        "narrative_arc": context.get("narrative_arc_type", "standard"),
+        "scene_types_str": json.dumps(scene_types),
+    }
     
-    # Template with {{placeholders}} for RAW mode highlighting
-    prompt_template = f'''Tu es un planificateur de scènes. Crée un plan de scènes pour cette vidéo.
-
-TYPE DE VIDÉO: {video_type}
-
-CONTEXTE:
-- Style: {{{{visual_style}}}}
-- Ton: {{{{tone}}}}
-- Durée TOTALE: {{{{target_duration}}}} secondes (RESPECTE CETTE DURÉE)
-- Nombre de scènes suggéré: {{{{suggested_count}}}}
-- Personnages: {{{{chars_str}}}}
-- Lieux: {{{{locs_str}}}}
-- Arc narratif: {{{{narrative_arc}}}}
-
-TYPES DE SCÈNES POSSIBLES: {scene_types_str}
-
-CONTRAINTES:
-- La somme de toutes les durées DOIT égaler EXACTEMENT {{{{target_duration}}}} secondes
-- Minimum 5s par scène, maximum 45s par scène
-- Utilise les types de scènes listés ci-dessus
-
-RETOURNE CE JSON REMPLI:
-{{
-  "scene_plan": [
-    {{"index": 1, "type": "setup", "title_suggestion": "Titre ici", "duration_seconds": 20, "purpose": "But de la scène", "key_action": "Action principale"}},
-    {{"index": 2, "type": "...", "title_suggestion": "...", "duration_seconds": ..., "purpose": "...", "key_action": "..."}},
-    ...
-  ],
-  "total_duration_seconds": {{{{target_duration}}}}
-}}'''
-
-    # Payload with actual values
-    prompt_payload = f'''Tu es un planificateur de scènes. Crée un plan de scènes pour cette vidéo.
-
-TYPE DE VIDÉO: {video_type}
-
-CONTEXTE:
-- Style: {visual_style}
-- Ton: {tone}
-- Durée TOTALE: {target_duration} secondes (RESPECTE CETTE DURÉE)
-- Nombre de scènes suggéré: {suggested_count}
-- Personnages: {chars_str}
-- Lieux: {locs_str}
-- Arc narratif: {narrative_arc}
-
-TYPES DE SCÈNES POSSIBLES: {scene_types_str}
-
-CONTRAINTES:
-- La somme de toutes les durées DOIT égaler EXACTEMENT {target_duration} secondes
-- Minimum 5s par scène, maximum 45s par scène
-- Utilise les types de scènes listés ci-dessus
-
-RETOURNE CE JSON REMPLI:
-{{
-  "scene_plan": [
-    {{"index": 1, "type": "setup", "title_suggestion": "Titre ici", "duration_seconds": 20, "purpose": "But de la scène", "key_action": "Action principale"}},
-    {{"index": 2, "type": "...", "title_suggestion": "...", "duration_seconds": ..., "purpose": "...", "key_action": "..."}},
-    ...
-  ],
-  "total_duration_seconds": {target_duration}
-}}'''
-
-    return prompt_template, prompt_payload
+    return interpolate_template(template_str, variables)
 
 
 def build_asset_prompt(template: dict, context: dict, existing_assets: list) -> tuple[str, str]:
     """
-    Build asset reconciler prompt.
+    Build asset reconciler prompt by reading from JSON template.
     Returns: (prompt_template with {{placeholders}}, prompt_payload with values)
     """
-    video_type = template.get("type", "general")
+    # Get template string from JSON
+    template_str = get_prompt_template(template, "asset_reconciler")
     
-    visual_style = context.get("fused_visual_style", "Cinematic")
+    if not template_str:
+        print("Warning: asset_reconciler template not found in JSON, using fallback")
+        template_str = "Tu es un gestionnaire d'assets. Identifie les personnages et lieux."
+    
+    # Prepare variables
     characters = context.get("characters_detected", [])
     locations = context.get("locations_detected", [])
     
@@ -306,83 +261,28 @@ def build_asset_prompt(template: dict, context: dict, existing_assets: list) -> 
     else:
         existing_str = "  AUCUN"
     
-    chars_str = ", ".join(characters) if characters else "À déduire du pitch"
-    locs_str = ", ".join(locations) if locations else "À déduire du pitch"
+    variables = {
+        "video_type": template.get("type", "general"),
+        "visual_style": context.get("fused_visual_style", "Cinematic"),
+        "chars_str": ", ".join(characters) if characters else "À déduire du pitch",
+        "locs_str": ", ".join(locations) if locations else "À déduire du pitch",
+        "existing_str": existing_str,
+    }
     
-    # Template with {{placeholders}} for RAW mode highlighting
-    prompt_template = f'''Tu es un gestionnaire d'assets. Identifie les personnages et lieux nécessaires.
-
-TYPE DE VIDÉO: {video_type}
-STYLE VISUEL: {{{{visual_style}}}}
-
-PERSONNAGES DÉTECTÉS: {{{{chars_str}}}}
-LIEUX DÉTECTÉS: {{{{locs_str}}}}
-
-ASSETS EXISTANTS:
-{{{{existing_str}}}}
-
-RÈGLES:
-- USE: si un asset existant correspond (même approximativement)
-- CREATE: si l'asset n'existe pas encore
-- JAMAIS créer de doublon
-
-RETOURNE CE JSON REMPLI:
-{{
-  "character_plan": [
-    {{"role_name": "Nom", "action": "USE", "existing_asset_id": 116}},
-    {{"role_name": "Nom", "action": "CREATE", "create_prompt": "Description style {{{{visual_style}}}}"}}
-  ],
-  "location_plan": [
-    {{"role_name": "Nom", "action": "CREATE", "create_prompt": "Description style {{{{visual_style}}}}"}}
-  ],
-  "object_plan": []
-}}'''
-
-    # Payload with actual values
-    prompt_payload = f'''Tu es un gestionnaire d'assets. Identifie les personnages et lieux nécessaires.
-
-TYPE DE VIDÉO: {video_type}
-STYLE VISUEL: {visual_style}
-
-PERSONNAGES DÉTECTÉS: {chars_str}
-LIEUX DÉTECTÉS: {locs_str}
-
-ASSETS EXISTANTS:
-{existing_str}
-
-RÈGLES:
-- USE: si un asset existant correspond (même approximativement)
-- CREATE: si l'asset n'existe pas encore
-- JAMAIS créer de doublon
-
-RETOURNE CE JSON REMPLI:
-{{
-  "character_plan": [
-    {{"role_name": "Nom", "action": "USE", "existing_asset_id": 116}},
-    {{"role_name": "Nom", "action": "CREATE", "create_prompt": "Description style {visual_style}"}}
-  ],
-  "location_plan": [
-    {{"role_name": "Nom", "action": "CREATE", "create_prompt": "Description style {visual_style}"}}
-  ],
-  "object_plan": []
-}}'''
-
-    return prompt_template, prompt_payload
+    return interpolate_template(template_str, variables)
 
 
 def build_screenwriter_prompt(template: dict, context: dict, scene_plan: list, asset_mapping: dict) -> tuple[str, str]:
     """
-    Build screenwriter prompt.
+    Build screenwriter prompt by reading from JSON template.
     Returns: (prompt_template with {{placeholders}}, prompt_payload with values)
     """
-    video_type = template.get("type", "general")
+    # Get template string from JSON
+    template_str = get_prompt_template(template, "screenwriter")
     
-    title = context.get("title", "")
-    pitch = context.get("pitch", "")
-    visual_style = context.get("fused_visual_style", "")
-    tone = context.get("tone", "")
-    language = context.get("language", "French")
-    target_duration = context.get("target_duration_seconds", 60)
+    if not template_str:
+        print("Warning: screenwriter template not found in JSON, using fallback")
+        template_str = "Tu es un scénariste. Écris les scènes détaillées."
     
     # Build scene plan text
     if scene_plan:
@@ -393,71 +293,21 @@ def build_screenwriter_prompt(template: dict, context: dict, scene_plan: list, a
     else:
         plan_str = "  Pas de plan fourni - crée un plan cohérent"
     
-    # Build asset lists
+    # Build asset lists from mapping
     characters = [info.get("name", role) for role, info in asset_mapping.items() if info.get("type") == "character"]
     locations = [info.get("name", role) for role, info in asset_mapping.items() if info.get("type") == "location"]
     
-    chars_str = ", ".join(characters) if characters else "Définis tes propres personnages"
-    locs_str = ", ".join(locations) if locations else "Définis tes propres lieux"
+    variables = {
+        "video_type": template.get("type", "general"),
+        "title": context.get("title", ""),
+        "pitch": context.get("pitch", ""),
+        "visual_style": context.get("fused_visual_style", ""),
+        "tone": context.get("tone", ""),
+        "language": context.get("language", "French"),
+        "target_duration": context.get("target_duration_seconds", 60),
+        "plan_str": plan_str,
+        "chars_str": ", ".join(characters) if characters else "Définis tes propres personnages",
+        "locs_str": ", ".join(locations) if locations else "Définis tes propres lieux",
+    }
     
-    # Template with {{placeholders}} for RAW mode highlighting
-    prompt_template = f'''Tu es un scénariste. Écris les scènes détaillées pour cette vidéo.
-
-TYPE: {video_type}
-TITRE: "{{{{title}}}}"
-PITCH: "{{{{pitch}}}}"
-STYLE: {{{{visual_style}}}}
-TON: {{{{tone}}}}
-DURÉE TOTALE: {{{{target_duration}}}} secondes
-
-PLAN DE SCÈNES À SUIVRE:
-{{{{plan_str}}}}
-
-PERSONNAGES DISPONIBLES: {{{{chars_str}}}}
-LIEUX DISPONIBLES: {{{{locs_str}}}}
-
-CONTRAINTES:
-- Respecte les durées du plan
-- Écris en {{{{language}}}}
-- La somme des durées DOIT égaler {{{{target_duration}}}}s
-
-RETOURNE CE JSON REMPLI:
-{{
-  "scenes": [
-    {{"index": 1, "title": "Titre de scène", "summary": "Description en 2-3 phrases", "duration_seconds": 20, "character_names": ["Personnage1"], "location_name": "Lieu"}},
-    ...
-  ],
-  "total_duration_seconds": {{{{target_duration}}}}
-}}'''
-
-    # Payload with actual values
-    prompt_payload = f'''Tu es un scénariste. Écris les scènes détaillées pour cette vidéo.
-
-TYPE: {video_type}
-TITRE: "{title}"
-PITCH: "{pitch}"
-STYLE: {visual_style}
-TON: {tone}
-DURÉE TOTALE: {target_duration} secondes
-
-PLAN DE SCÈNES À SUIVRE:
-{plan_str}
-
-PERSONNAGES DISPONIBLES: {chars_str}
-LIEUX DISPONIBLES: {locs_str}
-
-CONTRAINTES:
-- Respecte les durées du plan
-- Écris en {language}
-- La somme des durées DOIT égaler {target_duration}s
-
-RETOURNE CE JSON REMPLI:
-{{
-  "scenes": [
-    {{"index": 1, "title": "Titre de scène", "summary": "Description en 2-3 phrases", "duration_seconds": 20, "character_names": ["Personnage1"], "location_name": "Lieu"}},
-    ...
-  ],
-  "total_duration_seconds": {target_duration}
-}}'''
-
-    return prompt_template, prompt_payload
+    return interpolate_template(template_str, variables)

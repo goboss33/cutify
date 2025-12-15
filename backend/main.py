@@ -1020,7 +1020,7 @@ async def clear_ai_logs(project_id: int = None):
     return {"status": "cleared"}
 
 # --- Template Editor Endpoints ---
-from services.template_loader import get_all_templates, save_template, delete_template, create_template
+from services.template_loader import get_all_templates, save_template, delete_template, create_template, clear_template_cache
 
 @app.get("/api/templates")
 async def list_templates():
@@ -1045,6 +1045,8 @@ async def update_template(slug: str, data: TemplateUpdate):
     success = save_template(slug, data.template)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to save template")
+    # Clear cache so pipeline uses updated template
+    clear_template_cache()
     return {"status": "updated", "slug": slug}
 
 class TemplateCreate(BaseModel):

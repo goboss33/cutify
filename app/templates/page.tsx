@@ -579,8 +579,9 @@ export default function TemplateEditorPage() {
         if (templatePrompts) {
             for (const key of Object.keys(defaultPrompts) as (keyof StoredPrompts)[]) {
                 const stepConfig = templatePrompts[key] as Record<string, unknown> | undefined
-                if (stepConfig?.custom_prompt && typeof stepConfig.custom_prompt === 'string') {
-                    newPrompts[key] = stepConfig.custom_prompt
+                // Read from 'template' field (used by backend) instead of 'custom_prompt'
+                if (stepConfig?.template && typeof stepConfig.template === 'string') {
+                    newPrompts[key] = stepConfig.template
                 }
             }
         }
@@ -682,12 +683,12 @@ export default function TemplateEditorPage() {
             // Update asset types
             updatedTemplate.asset_types = assetTypes
 
-            // Update prompts
+            // Update prompts - write to 'template' field (used by backend)
             if (!updatedTemplate.prompts) updatedTemplate.prompts = {}
             const templatePrompts = updatedTemplate.prompts as Record<string, unknown>
             for (const key of Object.keys(prompts) as (keyof StoredPrompts)[]) {
                 if (!templatePrompts[key]) templatePrompts[key] = {};
-                (templatePrompts[key] as Record<string, unknown>).custom_prompt = prompts[key]
+                (templatePrompts[key] as Record<string, unknown>).template = prompts[key]
             }
 
             const res = await fetch(`http://127.0.0.1:8000/api/templates/${selectedTemplate.slug}`, {
