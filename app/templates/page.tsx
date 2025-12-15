@@ -728,7 +728,7 @@ export default function TemplateEditorPage() {
                 <header className="border-b border-white/10 bg-black/20 backdrop-blur-xl sticky top-0 z-50">
                     <div className="max-w-[1800px] mx-auto px-4 h-14 flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <Link href="/ai-console" className="text-white/60 hover:text-white transition-colors">
+                            <Link href="/debug" className="text-white/60 hover:text-white transition-colors">
                                 <ChevronLeft className="h-5 w-5" />
                             </Link>
                             <h1 className="text-lg font-semibold text-white">Template Editor</h1>
