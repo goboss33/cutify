@@ -668,6 +668,28 @@ export default function TemplateEditorPage() {
         setSaveStatus("idle")
     }, [prompts, sceneTypes, assetTypes, templateName, templateDescription])
 
+    // Reset schema editor when switching tabs (service)
+    useEffect(() => {
+        if (showSchemaEditor) {
+            // Regenerate schema content for the new active service
+            const schema = outputSchemas[activeTab] || { required: [], optional: [], types: {}, defaults: {} }
+            const sampleJson: Record<string, unknown> = {}
+            const allFields = [...(schema.required || []), ...(schema.optional || [])]
+            for (const field of allFields) {
+                const fieldType = schema.types?.[field] || "string"
+                if (fieldType === "array") {
+                    sampleJson[field] = ["...", "..."]
+                } else if (fieldType === "number") {
+                    sampleJson[field] = "..."
+                } else {
+                    sampleJson[field] = "..."
+                }
+            }
+            setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
+            setSchemaError(null)
+        }
+    }, [activeTab, showSchemaEditor, outputSchemas])
+
     const handlePromptChange = (value: string) => {
         setPrompts(prev => ({ ...prev, [activeTab]: value }))
     }
@@ -738,6 +760,7 @@ export default function TemplateEditorPage() {
             }
 
             // Update output_schema for each service
+            console.log("📤 Saving outputSchemas:", outputSchemas)
             for (const key of Object.keys(outputSchemas)) {
                 if (!templatePrompts[key]) templatePrompts[key] = {};
                 (templatePrompts[key] as Record<string, unknown>).output_schema = outputSchemas[key]
@@ -818,6 +841,7 @@ export default function TemplateEditorPage() {
                 types,
                 defaults: {}
             }
+            console.log("💾 Saving schema for", activeTab, ":", newSchema)
             setOutputSchemas(prev => ({
                 ...prev,
                 [activeTab]: newSchema
