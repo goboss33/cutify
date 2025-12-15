@@ -30,99 +30,147 @@ interface AILog {
 // API Helper (assuming API_BASE is globally available or we use relative path)
 const API_BASE = "http://localhost:8000";
 
-// Helper function to render prompt with highlighting
-// RAW mode: Shows template with {{placeholders}} highlighted in orange
-// PAYLOAD mode: Shows interpolated prompt - only highlight values that replaced {{placeholders}}
+/**
+ * ============================================================================
+ * PROMPT HIGHLIGHTING SYSTEM
+ * ============================================================================
+ * 
+ * This function handles the visual highlighting of prompts in the AI Console.
+ * 
+ * MODES:
+ * - RAW: Shows the template with {{placeholders}} highlighted in ORANGE
+ * - PAYLOAD: Shows the interpolated prompt with replaced VALUES highlighted in GREEN
+ * 
+ * HOW IT WORKS:
+ * 1. RAW mode is simple: regex finds all {{...}} patterns and wraps them in orange
+ * 2. PAYLOAD mode uses a diff algorithm:
+ *    - Splits the template by {{...}} to get static parts
+ *    - Uses those static parts as anchors to identify what was interpolated
+ *    - Highlights the interpolated values in green
+ * 
+ * ROBUSTNESS:
+ * - Works regardless of the number of lines
+ * - Works regardless of placeholder names
+ * - Falls back gracefully if template is not available
+ * ============================================================================
+ */
 function renderHighlightedPrompt(
     promptPayload: string,
     promptTemplate: string | undefined,
     mode: "raw" | "payload"
 ): React.ReactNode {
 
+    // =========================================================================
+    // RAW MODE: Display template with {{placeholders}} highlighted in orange
+    // =========================================================================
     if (mode === "raw" && promptTemplate) {
-        // RAW MODE: Display template with {{placeholders}} highlighted in orange
-        const lines = promptTemplate.split('\n');
-        return lines.map((line, idx) => {
-            // Highlight {{placeholder}} patterns
-            const parts = line.split(/(\{\{[^}]+\}\})/g);
-            return (
-                <span key={idx}>
-                    {parts.map((part, partIdx) => {
-                        if (part.match(/^\{\{[^}]+\}\}$/)) {
-                            // This is a placeholder - highlight in orange
-                            return (
-                                <span key={partIdx} className="bg-orange-500/30 text-orange-400 px-1 rounded font-semibold">
-                                    {part}
-                                </span>
-                            );
-                        }
-                        return <span key={partIdx}>{part}</span>;
-                    })}
-                    {"\n"}
-                </span>
-            );
-        });
-    } else if (mode === "payload" && promptTemplate) {
-        // PAYLOAD MODE with template: Compare line by line
-        const templateLines = promptTemplate.split('\n');
-        const payloadLines = promptPayload.split('\n');
+        // Simple approach: split by {{...}} pattern, highlight matches
+        const parts = promptTemplate.split(/(\{\{[^}]+\}\})/g);
 
-        return payloadLines.map((payloadLine, idx) => {
-            const templateLine = templateLines[idx] || "";
-
-            // Check if template line contains {{placeholders}}
-            if (templateLine.includes("{{")) {
-                // Extract static parts from template (everything except placeholders)
-                const staticParts = templateLine.split(/\{\{[^}]+\}\}/g).filter(p => p.length > 0);
-
-                // Find the interpolated values in the payload line
-                let result: React.ReactNode[] = [];
-                let remaining = payloadLine;
-                let partIndex = 0;
-
-                for (const staticPart of staticParts) {
-                    const staticIdx = remaining.indexOf(staticPart);
-
-                    if (staticIdx > 0) {
-                        // Part before static = interpolated value
-                        const interpolated = remaining.slice(0, staticIdx);
-                        result.push(
-                            <span key={`val-${partIndex}`} className="bg-green-500/30 text-green-400 px-0.5 rounded">
-                                {interpolated}
+        return (
+            <span>
+                {parts.map((part, idx) => {
+                    if (part.match(/^\{\{[^}]+\}\}$/)) {
+                        // This is a {{placeholder}} - highlight in orange
+                        return (
+                            <span
+                                key={idx}
+                                className="bg-orange-500/30 text-orange-400 px-1 rounded font-semibold"
+                            >
+                                {part}
                             </span>
                         );
-                    } else if (staticIdx === -1) {
-                        // Static part not found, line changed completely
-                        return <span key={idx} className="bg-green-500/30 text-green-400 px-0.5 rounded">{payloadLine}{"\n"}</span>;
                     }
+                    // Regular text - render as-is, preserving newlines
+                    return <span key={idx}>{part}</span>;
+                })}
+            </span>
+        );
+    }
 
-                    // Add the static part as-is
-                    result.push(<span key={`static-${partIndex}`}>{staticPart}</span>);
-                    remaining = remaining.slice(staticIdx + staticPart.length);
-                    partIndex++;
-                }
+    // =========================================================================
+    // PAYLOAD MODE: Highlight interpolated values in green
+    // =========================================================================
+    if (mode === "payload" && promptTemplate) {
+        // Strategy:
+        // 1. Extract all static parts from template (text between placeholders)
+        // 2. Use those static parts as "anchors" to find interpolated values in payload
+        // 3. Everything between anchors = interpolated value = highlight green
 
-                // Any remaining text is an interpolated value at the end
-                if (remaining.length > 0) {
-                    result.push(
-                        <span key={`val-end`} className="bg-green-500/30 text-green-400 px-0.5 rounded">
-                            {remaining}
-                        </span>
-                    );
-                }
+        // Split template to get: [static, placeholder, static, placeholder, static, ...]
+        const templateParts = promptTemplate.split(/(\{\{[^}]+\}\})/g);
 
-                return <span key={idx}>{result}{"\n"}</span>;
+        // Extract only static parts (non-placeholder parts)
+        const staticParts: string[] = [];
+        for (const part of templateParts) {
+            if (!part.match(/^\{\{[^}]+\}\}$/)) {
+                staticParts.push(part);
+            }
+        }
+
+        // Now walk through the payload, finding each static part
+        // Everything between static parts is an interpolated value
+        const result: React.ReactNode[] = [];
+        let remaining = promptPayload;
+        let keyIdx = 0;
+
+        for (let i = 0; i < staticParts.length; i++) {
+            const staticPart = staticParts[i];
+
+            // Skip empty static parts
+            if (staticPart.length === 0) continue;
+
+            // Find where this static part starts in the remaining payload
+            const staticIdx = remaining.indexOf(staticPart);
+
+            if (staticIdx === -1) {
+                // Static part not found - the template and payload have diverged
+                // This can happen if the AI modified the structure
+                // Fallback: show the rest as-is (no highlighting)
+                result.push(<span key={keyIdx++}>{remaining}</span>);
+                remaining = "";
+                break;
             }
 
-            // No placeholders in template - show as-is
-            return <span key={idx}>{payloadLine}{"\n"}</span>;
-        });
-    } else {
-        // No template available - just show payload without highlighting
-        return promptPayload.split('\n').map((line, idx) => (
-            <span key={idx}>{line}{"\n"}</span>
-        ));
+            if (staticIdx > 0) {
+                // There's text BEFORE the static part = interpolated value
+                const interpolatedValue = remaining.slice(0, staticIdx);
+                result.push(
+                    <span
+                        key={keyIdx++}
+                        className="bg-green-500/30 text-green-400 rounded"
+                    >
+                        {interpolatedValue}
+                    </span>
+                );
+            }
+
+            // Add the static part as-is
+            result.push(<span key={keyIdx++}>{staticPart}</span>);
+
+            // Move past this static part
+            remaining = remaining.slice(staticIdx + staticPart.length);
+        }
+
+        // Any remaining text after all static parts = final interpolated value
+        if (remaining.length > 0) {
+            result.push(
+                <span
+                    key={keyIdx++}
+                    className="bg-green-500/30 text-green-400 rounded"
+                >
+                    {remaining}
+                </span>
+            );
+        }
+
+        return <span>{result}</span>;
     }
+
+    // =========================================================================
+    // FALLBACK: No template available - show payload without highlighting
+    // =========================================================================
+    return <span>{promptPayload}</span>;
 }
 
 export function AIDebugConsole() {
