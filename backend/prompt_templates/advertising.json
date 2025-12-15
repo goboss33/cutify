@@ -70,7 +70,17 @@
         "target_audience": "string"
       },
       "custom_prompt": "Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.\n\nTYPE DE VIDÉO: cinematic\n\nENTRÉES:\n- Titre: \"{{title}}\"\n- Pitch: \"{{pitch}}\"\n- Style visuel demandé: \"{{visual_style}}\"\n- Durée cible: {{duration}} secondes\n- Tags détectés: {{tags_str}}\n- Réponses utilisateur: {{answers_str}}\n- Langue: {{language}}\n\nINSTRUCTIONS:\n1. Analyse le pitch pour extraire les personnages, lieux, ton, etc.\n2. Fusionne le style visuel (pitch + demandé). Ex: si pitch dit \"ghibli\" et style=\"Cinematic\" → \"Ghibli + Cinematic\"\n3. Calcule le nombre de scènes suggéré (durée / 15 secondes environ)\n\nRETOURNE CE JSON REMPLIS (remplace les ... par des vraies valeurs):\n{\n  \"fused_visual_style\": \"...\",\n  \"tone\": \"...\",\n  \"pacing\": \"...\",\n  \"language\": {{language}},\n  \"target_duration_seconds\": {{duration}},\n  \"suggested_scene_count\": ...,\n  \"key_narrative_elements\": [\"...\", \"...\"],\n  \"characters_detected\": [\"...\", \"...\"],\n  \"locations_detected\": [\"...\", \"...\"],\n  \"narrative_arc_type\": \"...\",\n  \"target_audience\": \"...\",\n  \"mood\": \"...\"\n}",
-      "template": "Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.\n\nTYPE DE VIDÉO: {{video_type}}\n\nENTRÉES:\n- Titre: \"{{title}}\"\n- Pitch: \"{{pitch}}\"\n- Style visuel demandé: \"{{visual_style}}\"\n- Durée cible: {{duration}} secondes\n- Tags détectés: {{tags_str}}\n- Réponses utilisateur: {{answers_str}}\n- Langue: {{language}}\n\nINSTRUCTIONS:\n1. Analyse le pitch pour extraire les personnages, lieux, ton, etc.\n2. Fusionne le style visuel (pitch + demandé). Ex: si pitch dit \"ghibli\" et style=\"Cinematic\" → \"Ghibli + Cinematic\"\n3. Calcule le nombre de scènes suggéré (durée / 15 secondes environ)\n\nRETOURNE CE JSON REMPLIS (remplace les ... par des vraies valeurs):\n{\n  \"fused_visual_style\": \"...\",\n  \"tone\": \"...\",\n  \"pacing\": \"...\",\n  \"language\": \"{{language}}\",\n  \"target_duration_seconds\": {{duration}},\n  \"suggested_scene_count\": ...,\n  \"key_narrative_elements\": [\"...\", \"...\"],\n  \"characters_detected\": [\"...\", \"...\"],\n  \"locations_detected\": [\"...\", \"...\"],\n  \"narrative_arc_type\": \"...\",\n  \"target_audience\": \"...\",\n  \"mood\": \"...\"\n}"
+      "template": "Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.\n\nTYPE DE VIDÉO: {{video_type}}\n\nENTRÉES:\n- Titre: \"{{title}}\"\n- Pitch: \"{{pitch}}\"\n- Style visuel demandé: \"{{visual_style}}\"\n- Durée cible: {{duration}} secondes\n- Tags détectés: {{tags_str}}\n- Réponses utilisateur: {{answers_str}}\n- Langue: {{language}}\n\nINSTRUCTIONS:\n1. Analyse le pitch pour extraire les personnages, lieux, ton, etc.\n2. Fusionne le style visuel (pitch + demandé). Ex: si pitch dit \"ghibli\" et style=\"Cinematic\" → \"Ghibli + Cinematic\"\n3. Calcule le nombre de scènes suggéré (durée / 15 secondes environ)\n\nRETOURNE CE JSON REMPLIS (remplace les ... par des vraies valeurs):\n{\n  \"fused_visual_style\": \"...\",\n  \"tone\": \"...\",\n  \"pacing\": \"...\",\n  \"language\": \"{{language}}\",\n  \"target_duration_seconds\": {{duration}},\n  \"suggested_scene_count\": ...,\n  \"key_narrative_elements\": [\"...\", \"...\"],\n  \"characters_detected\": [\"...\", \"...\"],\n  \"locations_detected\": [\"...\", \"...\"],\n  \"narrative_arc_type\": \"...\",\n  \"target_audience\": \"...\",\n  \"mood\": \"...\"\n}",
+      "input_variables": [
+        "video_type",
+        "title",
+        "pitch",
+        "visual_style",
+        "duration",
+        "tags_str",
+        "answers_str",
+        "language"
+      ]
     },
     "scene_planner": {
       "role": "scene_planner",
@@ -96,7 +106,17 @@
         "total_duration_seconds": "number"
       },
       "custom_prompt": "Tu es un planificateur de scènes. Crée un plan pour cette vidéo.\n\nDurée TOTALE: {{target_duration}} secondes\nPersonnages: {{characters}}\nLieux: {{locations}}\n\nRETOURNE CE JSON REMPLI:\n{\n  \"scene_plan\": [\n    {\"index\": 1, \"type\": \"setup\", \"title_suggestion\": \"...\", \"duration_seconds\": 20}\n  ],\n  \"total_duration_seconds\": {{target_duration}}\n}",
-      "template": "Tu es un planificateur de scènes. Crée un plan de scènes pour cette vidéo.\n\nTYPE DE VIDÉO: {{video_type}}\n\nCONTEXTE:\n- Style: {{visual_style}}\n- Ton: {{tone}}\n- Durée TOTALE: {{target_duration}} secondes (RESPECTE CETTE DURÉE)\n- Nombre de scènes suggéré: {{suggested_count}}\n- Personnages: {{chars_str}}\n- Lieux: {{locs_str}}\n- Arc narratif: {{narrative_arc}}\n\nTYPES DE SCÈNES POSSIBLES: {{scene_types_str}}\n\nCONTRAINTES:\n- La somme de toutes les durées DOIT égaler EXACTEMENT {{target_duration}} secondes\n- Minimum 5s par scène, maximum 45s par scène\n- Utilise les types de scènes listés ci-dessus\n\nRETOURNE CE JSON REMPLI:\n{\n  \"scene_plan\": [\n    {\"index\": 1, \"type\": \"setup\", \"title_suggestion\": \"Titre ici\", \"duration_seconds\": 20, \"purpose\": \"But de la scène\", \"key_action\": \"Action principale\"},\n    {\"index\": 2, \"type\": \"...\", \"title_suggestion\": \"...\", \"duration_seconds\": ..., \"purpose\": \"...\", \"key_action\": \"...\"},\n    ...\n  ],\n  \"total_duration_seconds\": {{target_duration}}\n}"
+      "template": "Tu es un planificateur de scènes. Crée un plan de scènes pour cette vidéo.\n\nTYPE DE VIDÉO: {{video_type}}\n\nCONTEXTE:\n- Style: {{visual_style}}\n- Ton: {{tone}}\n- Durée TOTALE: {{target_duration}} secondes (RESPECTE CETTE DURÉE)\n- Nombre de scènes suggéré: {{suggested_count}}\n- Personnages: {{chars_str}}\n- Lieux: {{locs_str}}\n- Arc narratif: {{narrative_arc}}\n\nTYPES DE SCÈNES POSSIBLES: {{scene_types_str}}\n\nCONTRAINTES:\n- La somme de toutes les durées DOIT égaler EXACTEMENT {{target_duration}} secondes\n- Minimum 5s par scène, maximum 45s par scène\n- Utilise les types de scènes listés ci-dessus\n\nRETOURNE CE JSON REMPLI:\n{\n  \"scene_plan\": [\n    {\"index\": 1, \"type\": \"setup\", \"title_suggestion\": \"Titre ici\", \"duration_seconds\": 20, \"purpose\": \"But de la scène\", \"key_action\": \"Action principale\"},\n    {\"index\": 2, \"type\": \"...\", \"title_suggestion\": \"...\", \"duration_seconds\": ..., \"purpose\": \"...\", \"key_action\": \"...\"},\n    ...\n  ],\n  \"total_duration_seconds\": {{target_duration}}\n}",
+      "input_variables": [
+        "video_type",
+        "fused_visual_style",
+        "tone",
+        "target_duration_seconds",
+        "suggested_scene_count",
+        "chars_str",
+        "locs_str",
+        "narrative_arc_type"
+      ]
     },
     "asset_reconciler": {
       "role": "asset_reconciler",
@@ -108,7 +128,31 @@
         "actors": "Personnages/acteurs"
       },
       "custom_prompt": "Tu es un gestionnaire d'assets. Identifie les personnages et lieux.\n\nPERSONNAGES DÉTECTÉS: {{characters}}\nLIEUX DÉTECTÉS: {{locations}}\n\nRETOURNE CE JSON:\n{\n  \"character_plan\": [...],\n  \"location_plan\": [...]\n}",
-      "template": "Tu es un gestionnaire d'assets. Identifie les personnages et lieux nécessaires.\n\nTYPE DE VIDÉO: {{video_type}}\nSTYLE VISUEL: {{visual_style}}\n\nPERSONNAGES DÉTECTÉS: {{chars_str}}\nLIEUX DÉTECTÉS: {{locs_str}}\n\nASSETS EXISTANTS:\n{{existing_str}}\n\nRÈGLES:\n- USE: si un asset existant correspond (même approximativement)\n- CREATE: si l'asset n'existe pas encore\n- JAMAIS créer de doublon\n\nRETOURNE CE JSON REMPLI:\n{\n  \"character_plan\": [\n    {\"role_name\": \"Nom\", \"action\": \"USE\", \"existing_asset_id\": 116},\n    {\"role_name\": \"Nom\", \"action\": \"CREATE\", \"create_prompt\": \"Description style {{visual_style}}\"}\n  ],\n  \"location_plan\": [\n    {\"role_name\": \"Nom\", \"action\": \"CREATE\", \"create_prompt\": \"Description style {{visual_style}}\"}\n  ],\n  \"object_plan\": []\n}"
+      "template": "Tu es un gestionnaire d'assets. Identifie les personnages et lieux nécessaires.\n\nTYPE DE VIDÉO: {{video_type}}\nSTYLE VISUEL: {{visual_style}}\n\nPERSONNAGES DÉTECTÉS: {{chars_str}}\nLIEUX DÉTECTÉS: {{locs_str}}\n\nASSETS EXISTANTS:\n{{existing_str}}\n\nRÈGLES:\n- USE: si un asset existant correspond (même approximativement)\n- CREATE: si l'asset n'existe pas encore\n- JAMAIS créer de doublon\n\nRETOURNE CE JSON REMPLI:\n{\n  \"character_plan\": [\n    {\"role_name\": \"Nom\", \"action\": \"USE\", \"existing_asset_id\": 116},\n    {\"role_name\": \"Nom\", \"action\": \"CREATE\", \"create_prompt\": \"Description style {{visual_style}}\"}\n  ],\n  \"location_plan\": [\n    {\"role_name\": \"Nom\", \"action\": \"CREATE\", \"create_prompt\": \"Description style {{visual_style}}\"}\n  ],\n  \"object_plan\": []\n}",
+      "input_variables": [
+        "video_type",
+        "fused_visual_style",
+        "chars_str",
+        "locs_str",
+        "existing_str"
+      ],
+      "output_schema": {
+        "required": [
+          "character_plan",
+          "location_plan"
+        ],
+        "optional": [
+          "object_plan"
+        ],
+        "types": {
+          "character_plan": "array",
+          "location_plan": "array",
+          "object_plan": "array"
+        },
+        "defaults": {
+          "object_plan": []
+        }
+      }
     },
     "screenwriter": {
       "role": "screenwriter",
@@ -127,7 +171,19 @@
         ]
       },
       "custom_prompt": "Tu es un scénariste. Écris les scènes détaillées.\n\nTITRE: \"{{title}}\"\nDURÉE: {{target_duration}} secondes\n\nRETOURNE CE JSON:\n{\n  \"scenes\": [...]\n}",
-      "template": "Tu es un scénariste. Écris les scènes détaillées pour cette vidéo.\n\nTYPE: {{video_type}}\nTITRE: \"{{title}}\"\nPITCH: \"{{pitch}}\"\nSTYLE: {{visual_style}}\nTON: {{tone}}\nDURÉE TOTALE: {{target_duration}} secondes\n\nPLAN DE SCÈNES À SUIVRE:\n{{plan_str}}\n\nPERSONNAGES DISPONIBLES: {{chars_str}}\nLIEUX DISPONIBLES: {{locs_str}}\n\nCONTRAINTES:\n- Respecte les durées du plan\n- Écris en {{language}}\n- La somme des durées DOIT égaler {{target_duration}}s\n\nRETOURNE CE JSON REMPLI:\n{\n  \"scenes\": [\n    {\"index\": 1, \"title\": \"Titre de scène\", \"summary\": \"Description en 2-3 phrases\", \"duration_seconds\": 20, \"character_names\": [\"Personnage1\"], \"location_name\": \"Lieu\"},\n    ...\n  ],\n  \"total_duration_seconds\": {{target_duration}}\n}"
+      "template": "Tu es un scénariste. Écris les scènes détaillées pour cette vidéo.\n\nTYPE: {{video_type}}\nTITRE: \"{{title}}\"\nPITCH: \"{{pitch}}\"\nSTYLE: {{visual_style}}\nTON: {{tone}}\nDURÉE TOTALE: {{target_duration}} secondes\n\nPLAN DE SCÈNES À SUIVRE:\n{{plan_str}}\n\nPERSONNAGES DISPONIBLES: {{chars_str}}\nLIEUX DISPONIBLES: {{locs_str}}\n\nCONTRAINTES:\n- Respecte les durées du plan\n- Écris en {{language}}\n- La somme des durées DOIT égaler {{target_duration}}s\n\nRETOURNE CE JSON REMPLI:\n{\n  \"scenes\": [\n    {\"index\": 1, \"title\": \"Titre de scène\", \"summary\": \"Description en 2-3 phrases\", \"duration_seconds\": 20, \"character_names\": [\"Personnage1\"], \"location_name\": \"Lieu\"},\n    ...\n  ],\n  \"total_duration_seconds\": {{target_duration}}\n}",
+      "input_variables": [
+        "video_type",
+        "title",
+        "pitch",
+        "fused_visual_style",
+        "tone",
+        "target_duration_seconds",
+        "plan_str",
+        "chars_str",
+        "locs_str",
+        "language"
+      ]
     }
   },
   "ai_questions": {
@@ -142,5 +198,11 @@
       "émotion",
       "action souhaitée"
     ]
-  }
+  },
+  "pipeline_order": [
+    "context_analyzer",
+    "scene_planner",
+    "asset_reconciler",
+    "screenwriter"
+  ]
 }

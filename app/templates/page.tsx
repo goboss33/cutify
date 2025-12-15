@@ -62,7 +62,17 @@ interface StoredPrompts {
     scene_planner: string
     asset_reconciler: string
     screenwriter: string
+    [key: string]: string  // Allow dynamic keys
 }
+
+// Output schemas for each service - controls JSON structure returned by AI
+type OutputSchema = {
+    required: string[]
+    optional: string[]
+    types: Record<string, string>
+    defaults: Record<string, unknown>
+}
+type StoredSchemas = Record<string, OutputSchema>
 
 // Helper function to replace {{variable}} with example values
 // Uses [[value]] markers in preview mode so Monaco can highlight them green
@@ -222,13 +232,15 @@ function DroppableEditor({
     onChange,
     editorRef,
     isPreview = false,
-    variables = []
+    variables = [],
+    halfHeight = false
 }: {
     content: string
     onChange: (value: string) => void
     editorRef: React.MutableRefObject<editor.IStandaloneCodeEditor | null>
     isPreview?: boolean
     variables?: Variable[]
+    halfHeight?: boolean
 }) {
     const { setNodeRef, isOver } = useDroppable({ id: "editor-drop-zone" })
 
@@ -286,7 +298,7 @@ function DroppableEditor({
     return (
         <div
             ref={setNodeRef}
-            className={`flex-1 overflow-hidden relative transition-all duration-200 ${isOver && !isPreview ? 'ring-2 ring-orange-500 ring-inset' : ''}`}
+            className={`${halfHeight ? 'h-1/2' : 'flex-1'} overflow-hidden relative transition-all duration-200 min-h-0 ${isOver && !isPreview ? 'ring-2 ring-orange-500 ring-inset' : ''}`}
         >
             {isOver && !isPreview && (
                 <div className="absolute inset-0 bg-orange-500/10 z-10 pointer-events-none flex items-center justify-center">
@@ -532,7 +544,7 @@ export default function TemplateEditorPage() {
     const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
     const [prompts, setPrompts] = useState<StoredPrompts>(defaultPrompts)
     const [variables, setVariables] = useState<Record<string, Variable[]>>({})
-    const [activeTab, setActiveTab] = useState<keyof StoredPrompts>("context_analyzer")
+    const [activeTab, setActiveTab] = useState<string>("context_analyzer")
     const [searchQuery, setSearchQuery] = useState("")
     const [isSaving, setIsSaving] = useState(false)
     const [showPreview, setShowPreview] = useState(false)
@@ -545,6 +557,12 @@ export default function TemplateEditorPage() {
     const [assetTypes, setAssetTypes] = useState<string[]>([])
     const [templateName, setTemplateName] = useState("")
     const [templateDescription, setTemplateDescription] = useState("")
+
+    // Output Schema Editor state
+    const [outputSchemas, setOutputSchemas] = useState<StoredSchemas>({})
+    const [showSchemaEditor, setShowSchemaEditor] = useState(false)
+    const [schemaEditorContent, setSchemaEditorContent] = useState("")
+    const [schemaError, setSchemaError] = useState<string | null>(null)
 
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
 
@@ -573,19 +591,47 @@ export default function TemplateEditorPage() {
     }, [selectedTemplate?.slug])
 
     const loadFromTemplate = (template: Record<string, unknown>) => {
-        // Load prompts
+        console.log("📦 loadFromTemplate called with:", template)
+
+        // Load prompts and schemas dynamically from template
         const templatePrompts = template.prompts as Record<string, unknown> | undefined
-        const newPrompts = { ...defaultPrompts }
+        console.log("📋 templatePrompts:", templatePrompts)
+
+        const newPrompts: StoredPrompts = { ...defaultPrompts }
+        const newSchemas: StoredSchemas = {}
+
         if (templatePrompts) {
-            for (const key of Object.keys(defaultPrompts) as (keyof StoredPrompts)[]) {
-                const stepConfig = templatePrompts[key] as Record<string, unknown> | undefined
-                // Read from 'template' field (used by backend) instead of 'custom_prompt'
-                if (stepConfig?.template && typeof stepConfig.template === 'string') {
-                    newPrompts[key] = stepConfig.template
+            // Load ALL prompts from the template, not just hardcoded ones
+            for (const serviceName of Object.keys(templatePrompts)) {
+                const serviceConfig = templatePrompts[serviceName] as Record<string, unknown> | undefined
+                console.log(`🔧 Service ${serviceName}:`, serviceConfig?.template ? "HAS template" : "NO template")
+                if (serviceConfig?.template && typeof serviceConfig.template === 'string') {
+                    newPrompts[serviceName] = serviceConfig.template
+                }
+                // Load output_schema for each service
+                if (serviceConfig?.output_schema) {
+                    const schema = serviceConfig.output_schema as OutputSchema
+                    newSchemas[serviceName] = {
+                        required: schema.required || [],
+                        optional: schema.optional || [],
+                        types: schema.types || {},
+                        defaults: schema.defaults || {}
+                    }
                 }
             }
         }
+
+        console.log("✅ Final prompts keys:", Object.keys(newPrompts))
+        console.log("✅ Prompt context_analyzer length:", newPrompts.context_analyzer?.length)
+
         setPrompts(newPrompts)
+        setOutputSchemas(newSchemas)
+
+        // Set active tab to first available service
+        const serviceNames = Object.keys(newPrompts)
+        if (serviceNames.length > 0 && !serviceNames.includes(activeTab)) {
+            setActiveTab(serviceNames[0])
+        }
 
         // Load settings
         setTemplateName(template.name as string || "")
@@ -686,9 +732,15 @@ export default function TemplateEditorPage() {
             // Update prompts - write to 'template' field (used by backend)
             if (!updatedTemplate.prompts) updatedTemplate.prompts = {}
             const templatePrompts = updatedTemplate.prompts as Record<string, unknown>
-            for (const key of Object.keys(prompts) as (keyof StoredPrompts)[]) {
+            for (const key of Object.keys(prompts)) {
                 if (!templatePrompts[key]) templatePrompts[key] = {};
                 (templatePrompts[key] as Record<string, unknown>).template = prompts[key]
+            }
+
+            // Update output_schema for each service
+            for (const key of Object.keys(outputSchemas)) {
+                if (!templatePrompts[key]) templatePrompts[key] = {};
+                (templatePrompts[key] as Record<string, unknown>).output_schema = outputSchemas[key]
             }
 
             const res = await fetch(`http://127.0.0.1:8000/api/templates/${selectedTemplate.slug}`, {
@@ -721,6 +773,81 @@ export default function TemplateEditorPage() {
 
     const currentVariables = variables[activeTab] || []
     const currentPrompt = prompts[activeTab]
+    const currentSchema = outputSchemas[activeTab] || { required: [], optional: [], types: {}, defaults: {} }
+
+    // Open schema editor with current service's schema
+    const openSchemaEditor = () => {
+        // Build a sample JSON from schema for display
+        const sampleJson: Record<string, unknown> = {}
+        const allFields = [...(currentSchema.required || []), ...(currentSchema.optional || [])]
+        for (const field of allFields) {
+            const fieldType = currentSchema.types?.[field] || "string"
+            if (fieldType === "array") {
+                sampleJson[field] = ["...", "..."]
+            } else if (fieldType === "number") {
+                sampleJson[field] = "..."
+            } else {
+                sampleJson[field] = "..."
+            }
+        }
+        setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
+        setSchemaError(null)
+        setShowSchemaEditor(true)
+    }
+
+    // Save schema from editor
+    const saveSchema = () => {
+        try {
+            const parsed = JSON.parse(schemaEditorContent)
+            // Extract keys from the parsed JSON as schema fields
+            const fields = Object.keys(parsed)
+            const types: Record<string, string> = {}
+            for (const key of fields) {
+                const val = parsed[key]
+                if (Array.isArray(val)) {
+                    types[key] = "array"
+                } else if (typeof val === "number") {
+                    types[key] = "number"
+                } else {
+                    types[key] = "string"
+                }
+            }
+            const newSchema: OutputSchema = {
+                required: fields,
+                optional: [],
+                types,
+                defaults: {}
+            }
+            setOutputSchemas(prev => ({
+                ...prev,
+                [activeTab]: newSchema
+            }))
+            setSchemaError(null)
+            setShowSchemaEditor(false)
+            setHasChanges(true)
+        } catch (e) {
+            setSchemaError("JSON invalide: " + (e as Error).message)
+        }
+    }
+
+    // Get available variables from previous services
+    const getAvailableVariables = (): string[] => {
+        const serviceOrder = Object.keys(prompts)
+        const currentIndex = serviceOrder.indexOf(activeTab)
+
+        const availableVars: string[] = []
+
+        // Add all variables from previous services' output schemas
+        for (let i = 0; i < currentIndex; i++) {
+            const serviceName = serviceOrder[i]
+            const schema = outputSchemas[serviceName]
+            if (schema) {
+                availableVars.push(...(schema.required || []), ...(schema.optional || []))
+            }
+        }
+
+        return [...new Set(availableVars)]
+    }
 
     return (
         <DndContext onDragEnd={handleDragEnd}>
@@ -861,22 +988,19 @@ export default function TemplateEditorPage() {
                                 />
                             ) : (
                                 <>
-                                    {/* Tabs */}
+                                    {/* Tabs - Dynamic from template prompts */}
                                     <div className="border-b border-white/10 bg-black/10">
-                                        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as keyof StoredPrompts)} className="w-full">
-                                            <TabsList className="h-12 bg-transparent border-0 px-4 justify-start gap-1">
-                                                <TabsTrigger value="context_analyzer" className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300">
-                                                    Context Analyzer
-                                                </TabsTrigger>
-                                                <TabsTrigger value="scene_planner" className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300">
-                                                    Scene Planner
-                                                </TabsTrigger>
-                                                <TabsTrigger value="asset_reconciler" className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300">
-                                                    Asset Reconciler
-                                                </TabsTrigger>
-                                                <TabsTrigger value="screenwriter" className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300">
-                                                    Screenwriter
-                                                </TabsTrigger>
+                                        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)} className="w-full">
+                                            <TabsList className="h-12 bg-transparent border-0 px-4 justify-start gap-1 overflow-x-auto">
+                                                {Object.keys(prompts).map(serviceName => (
+                                                    <TabsTrigger
+                                                        key={serviceName}
+                                                        value={serviceName}
+                                                        className="data-[state=active]:bg-purple-600/30 data-[state=active]:text-purple-300 whitespace-nowrap"
+                                                    >
+                                                        {serviceName.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                                    </TabsTrigger>
+                                                ))}
                                             </TabsList>
                                         </Tabs>
                                     </div>
@@ -903,14 +1027,116 @@ export default function TemplateEditorPage() {
                                             </div>
                                         </div>
 
-                                        {/* Editor */}
-                                        <DroppableEditor
-                                            content={currentPrompt}
-                                            onChange={handlePromptChange}
-                                            editorRef={editorRef}
-                                            isPreview={showPreview}
-                                            variables={currentVariables}
-                                        />
+                                        {/* Editor Container with Schema Overlay */}
+                                        <div className="flex-1 flex flex-col relative min-h-0 h-full">
+                                            {/* Floating Output Schema Button */}
+                                            <button
+                                                onClick={() => showSchemaEditor ? setShowSchemaEditor(false) : openSchemaEditor()}
+                                                className={`absolute top-3 right-3 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 shadow-lg ${showSchemaEditor
+                                                    ? 'bg-green-500 text-white ring-2 ring-green-300'
+                                                    : 'bg-slate-700/90 border border-purple-500/50 text-purple-300 hover:bg-purple-600/30'
+                                                    }`}
+                                                title="Output Schema"
+                                            >
+                                                <Code className="h-5 w-5" />
+                                            </button>
+
+                                            {/* Main Editor Area - DroppableEditor handles its own sizing */}
+                                            <DroppableEditor
+                                                content={currentPrompt}
+                                                onChange={handlePromptChange}
+                                                editorRef={editorRef}
+                                                isPreview={showPreview}
+                                                variables={currentVariables}
+                                                halfHeight={showSchemaEditor}
+                                            />
+
+                                            {/* Schema Editor Overlay Panel */}
+                                            {showSchemaEditor && (
+                                                <div className="h-[50%] border-t-2 border-green-500/50 bg-slate-900/98 flex flex-col">
+                                                    {/* Header */}
+                                                    <div className="flex items-center justify-between p-3 border-b border-white/10 bg-green-500/10">
+                                                        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                                                            <Code className="h-4 w-4 text-green-400" />
+                                                            Output Schema - {activeTab.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                                        </h3>
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={saveSchema}
+                                                                className="bg-green-600 hover:bg-green-700 text-xs h-7"
+                                                            >
+                                                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                                                Appliquer
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => setShowSchemaEditor(false)}
+                                                                className="h-7 w-7 p-0 text-white/60 hover:text-white"
+                                                            >
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Available Variables from previous services */}
+                                                    {getAvailableVariables().length > 0 && (
+                                                        <div className="p-2 border-b border-white/10 bg-black/20">
+                                                            <p className="text-xs text-white/60 mb-1">Variables des services précédents (cliquez pour insérer)</p>
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {getAvailableVariables().map(varName => (
+                                                                    <Badge
+                                                                        key={varName}
+                                                                        variant="outline"
+                                                                        className="text-xs cursor-pointer bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20"
+                                                                        onClick={() => {
+                                                                            setSchemaEditorContent(prev => {
+                                                                                try {
+                                                                                    const parsed = JSON.parse(prev)
+                                                                                    parsed[varName] = "..."
+                                                                                    return JSON.stringify(parsed, null, 2)
+                                                                                } catch {
+                                                                                    return prev
+                                                                                }
+                                                                            })
+                                                                        }}
+                                                                    >
+                                                                        {varName}
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Schema JSON Editor */}
+                                                    <div className="flex-1 p-1">
+                                                        <Editor
+                                                            height="100%"
+                                                            language="json"
+                                                            theme="vs-dark"
+                                                            value={schemaEditorContent}
+                                                            onChange={(value) => setSchemaEditorContent(value || "")}
+                                                            options={{
+                                                                minimap: { enabled: false },
+                                                                fontSize: 12,
+                                                                lineNumbers: "off",
+                                                                scrollBeyondLastLine: false,
+                                                                wordWrap: "on",
+                                                            }}
+                                                        />
+                                                    </div>
+
+                                                    {/* Error message */}
+                                                    {schemaError && (
+                                                        <div className="p-2 bg-red-500/20 border-t border-red-500/30 text-red-400 text-xs">
+                                                            <AlertCircle className="h-3 w-3 inline mr-1" />
+                                                            {schemaError}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </>
                             )

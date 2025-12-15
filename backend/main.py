@@ -414,11 +414,14 @@ async def create_simple_scene_endpoint(project_id: int, input_data: CreateSceneI
 
 # V5 Pipeline import
 from services.pipeline_v5 import run_pipeline_v5
+# V6 Pipeline import (new architecture with context accumulation)
+from services.pipeline_v6 import run_pipeline_v6
 
 @app.post("/api/projects/{project_id}/generate-scenes", response_model=list[Scene])
 async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db)):
     """
-    V5 Pipeline: Dynamic templates based on video type
+    V6 Pipeline: Dynamic templates with context accumulation and JSON validation.
+    Uses prompts from the Template Editor.
     """
     # 1. Fetch Project
     project = db.query(ProjectDB).filter(ProjectDB.id == project_id).first()
@@ -482,9 +485,9 @@ async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db
         })
     
     # ═══════════════════════════════════════════════════
-    # RUN V5 PIPELINE
+    # RUN V6 PIPELINE (new architecture with context accumulation)
     # ═══════════════════════════════════════════════════
-    result = await run_pipeline_v5(
+    result = await run_pipeline_v6(
         project_id=project_id,
         video_type=video_type,
         inputs=inputs,
@@ -492,63 +495,20 @@ async def generate_scenes_endpoint(project_id: int, db: Session = Depends(get_db
         db=db
     )
     
-    scenes_data = result.get("scenes", [])
-    validation = result.get("validation", {})
-    
-    if not validation.get("valid", True):
-        print(f"Validation errors: {validation.get('errors', [])}")
-    
-    # ═══════════════════════════════════════════════════
-    # SAVE SCENES TO DB
-    # ═══════════════════════════════════════════════════
-    # Refresh project to get newly created assets
+    # V6 already creates scenes in the database, just fetch them
+    # Refresh project and get new scenes
     db.refresh(project)
     
-    # Build maps for associations
-    location_map = {loc.name.lower(): loc for loc in project.locations}
-    character_map = {char.name.lower(): char for char in project.characters}
+    from models import SceneDB
+    new_scenes = db.query(SceneDB).filter(
+        SceneDB.project_id == project_id
+    ).order_by(SceneDB.sequence_order).all()
     
-    new_scenes = []
-    for i, scene_item in enumerate(scenes_data):
-        # Get location
-        scene_location_name = scene_item.get("location_name", "")
-        scene_location = location_map.get(scene_location_name.lower()) if scene_location_name else None
-        
-        # Get duration
-        duration_seconds = scene_item.get("duration_seconds", 15)
-        estimated_duration = f"~{duration_seconds}s"
-        
-        new_scene = SceneDB(
-            project_id=project.id,
-            sequence_order=scene_item.get("index", i + 1),
-            title=scene_item.get("title", f"Scene {i+1}"),
-            summary=scene_item.get("summary", ""),
-            estimated_duration=estimated_duration,
-            status="pending",
-            location_id=scene_location.id if scene_location else None
-        )
-        db.add(new_scene)
-        db.flush()
-        
-        # Associate characters
-        for char_name in scene_item.get("character_names", []):
-            char = character_map.get(char_name.lower())
-            if char:
-                from sqlalchemy import insert
-                db.execute(
-                    insert(scene_characters).values(
-                        scene_id=new_scene.id,
-                        character_id=char.id
-                    )
-                )
-        
-        new_scenes.append(new_scene)
+    # Log any warnings from V6
+    warnings = result.get("warnings", [])
+    if warnings:
+        print(f"[Pipeline V6] Warnings: {warnings}")
     
-    db.commit()
-    
-    for s in new_scenes:
-        db.refresh(s)
-        
     return new_scenes
 
 @app.post("/api/scenes/{scene_id}/generate-script", response_model=Scene)

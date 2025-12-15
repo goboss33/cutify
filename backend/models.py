@@ -56,11 +56,20 @@ class ProjectDB(Base):
     category_preset_id = Column(Integer, ForeignKey("category_presets.id"), nullable=True)
     onboarding_context = Column(Text, nullable=True)  # JSON: {detected_tags: [], ai_answers: {}}
     
+    # Pipeline V6: JSONB fields for each service's output
+    # These store the raw output from each AI service for the project
+    pipeline_metadata = Column(Text, nullable=True)    # JSON: type-specific data (e.g., landing_url for ads)
+    context_data = Column(Text, nullable=True)         # JSON: ContextAnalyzer output
+    scene_plan_data = Column(Text, nullable=True)      # JSON: ScenePlanner output
+    asset_plan_data = Column(Text, nullable=True)      # JSON: AssetReconciler output
+    screenplay_data = Column(Text, nullable=True)      # JSON: Screenwriter output
+    
     category_preset = relationship("CategoryPresetDB")
     scenes = relationship("SceneDB", back_populates="project", cascade="all, delete-orphan", order_by="SceneDB.sequence_order")
     chat_history = relationship("ChatMessageDB", back_populates="project", cascade="all, delete-orphan")
     characters = relationship("CharacterDB", back_populates="project", cascade="all, delete-orphan")
     locations = relationship("LocationDB", back_populates="project", cascade="all, delete-orphan")
+
 
 class SceneDB(Base):
     __tablename__ = "scenes"
