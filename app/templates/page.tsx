@@ -666,14 +666,22 @@ export default function TemplateEditorPage() {
                 if (serviceConfig?.template && typeof serviceConfig.template === 'string') {
                     newPrompts[serviceName] = serviceConfig.template
                 }
-                // Load output_schema for each service
+                // Load output_schema for each service (supports both JSON Schema and legacy format)
                 if (serviceConfig?.output_schema) {
-                    const schema = serviceConfig.output_schema as OutputSchema
-                    newSchemas[serviceName] = {
-                        required: schema.required || [],
-                        optional: schema.optional || [],
-                        types: schema.types || {},
-                        defaults: schema.defaults || {}
+                    const schema = serviceConfig.output_schema as Record<string, unknown>
+
+                    // Check if it's a JSON Schema (has type, properties, $schema, or items)
+                    if (schema.type || schema.properties || schema.$schema || schema.items) {
+                        // Store JSON Schema directly
+                        newSchemas[serviceName] = schema as OutputSchema
+                    } else {
+                        // Legacy format
+                        newSchemas[serviceName] = {
+                            required: (schema.required as string[]) || [],
+                            optional: (schema.optional as string[]) || [],
+                            types: (schema.types as Record<string, string>) || {},
+                            defaults: (schema.defaults as Record<string, unknown>) || {}
+                        }
                     }
                 }
             }

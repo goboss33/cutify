@@ -41,7 +41,7 @@
   ],
   "prompts": {
     "context_analyzer": {
-      "template": "Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.\n\nTYPE DE VIDÉO: {{video_type}}\n\nENTRÉES:\n- Titre: \"{{title}}\"\n- Pitch: \"{{pitch}}\"\n- Style visuel demandé: \"{{visual_style}}\"\n- Durée cible: {{duration}} secondes\n- Tags détectés: {{tags_str}}\n- Réponses utilisateur: {{answers_str}}\n- Langue: {{language}}\n\nINSTRUCTIONS:\n1. Analyse le pitch pour extraire les personnages, lieux, ton, etc.\n2. Fusionne le style visuel (pitch + demandé). Ex: si pitch dit \"ghibli\" et style=\"Cinematic\" → \"Ghibli + Cinematic\"\n3. Calcule le nombre de scènes suggéré (durée / 15 secondes environ)\n\nRETOURNE CE JSON REMPLI (remplace les ... par des vraies valeurs):\n{\n  \"fused_visual_style\": \"...\",\n  \"tone\": \"...\",\n  \"pacing\": \"...\",\n  \"language\": \"{{language}}\",\n  \"target_duration_seconds\": {{duration}},\n  \"suggested_scene_count\": ...,\n  \"key_narrative_elements\": [\"...\", \"...\"],\n  \"characters_detected\": [\"...\", \"...\"],\n  \"locations_detected\": [\"...\", \"...\"],\n  \"narrative_arc_type\": \"...\",\n  \"target_audience\": \"...\",\n  \"mood\": \"...\"\n}",
+      "template": "Tu es un analyste de contexte vidéo. Analyse ce projet et retourne UNIQUEMENT un JSON avec les valeurs remplies.\n\nTYPE DE VIDÉO: {{video_type}}\n\nENTRÉES:\n- Titre: \"{{title}}\"\n- Pitch: \"{{pitch}}\"\n- Style visuel demandé: \"{{visual_style}}\"\n- Durée cible: {{duration}} secondes\n- Tags détectés: {{tags_str}}\n- Réponses utilisateur: {{answers_str}}\n- Langue: {{language}}\n\nINSTRUCTIONS:\n1. Analyse le pitch pour extraire les personnages, lieux, ton, etc.\n2. Fusionne le style visuel (pitch + demandé). Ex: si pitch dit \"ghibli\" et style=\"Cinematic\" → \"Ghibli + Cinematic\"\n3. Calcule le nombre de scènes suggéré (durée / 15 secondes environ)",
       "input_variables": [
         "video_type",
         "title",
@@ -53,40 +53,80 @@
         "language"
       ],
       "output_schema": {
+        "type": "object",
+        "properties": {
+          "fused_visual_style": {
+            "type": "string",
+            "description": "Style visuel fusionné (pitch + demandé)"
+          },
+          "tone": {
+            "type": "string",
+            "description": "Ton général de la vidéo"
+          },
+          "pacing": {
+            "type": "string",
+            "description": "Rythme de la vidéo (lent, moyen, rapide)"
+          },
+          "language": {
+            "type": "string",
+            "description": "Langue de la vidéo"
+          },
+          "target_duration_seconds": {
+            "type": "integer",
+            "description": "Durée cible en secondes"
+          },
+          "suggested_scene_count": {
+            "type": "integer",
+            "description": "Nombre de scènes suggéré"
+          },
+          "key_narrative_elements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Éléments narratifs clés identifiés"
+          },
+          "characters_detected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Personnages détectés dans le pitch"
+          },
+          "locations_detected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Lieux détectés dans le pitch"
+          },
+          "narrative_arc_type": {
+            "type": "string",
+            "description": "Type d'arc narratif (hero's journey, etc.)"
+          },
+          "target_audience": {
+            "type": "string",
+            "description": "Public cible"
+          },
+          "mood": {
+            "type": "string",
+            "description": "Ambiance générale"
+          }
+        },
         "required": [
           "fused_visual_style",
           "tone",
+          "pacing",
+          "language",
+          "target_duration_seconds",
+          "suggested_scene_count",
+          "key_narrative_elements",
           "characters_detected",
           "locations_detected",
-          "target_duration_seconds"
-        ],
-        "optional": [
-          "pacing",
-          "mood",
           "narrative_arc_type",
           "target_audience",
-          "key_narrative_elements",
-          "suggested_scene_count"
-        ],
-        "types": {
-          "fused_visual_style": "string",
-          "tone": "string",
-          "pacing": "string",
-          "language": "string",
-          "target_duration_seconds": "number",
-          "suggested_scene_count": "number",
-          "key_narrative_elements": "array",
-          "characters_detected": "array",
-          "locations_detected": "array",
-          "narrative_arc_type": "string",
-          "target_audience": "string",
-          "mood": "string"
-        },
-        "defaults": {
-          "pacing": "medium",
-          "mood": "neutral",
-          "narrative_arc_type": "classic"
-        }
+          "mood"
+        ]
       }
     },
     "scene_planner": {
@@ -106,10 +146,12 @@
           "scene_plan",
           "total_duration_seconds"
         ],
+        "optional": [],
         "types": {
           "scene_plan": "array",
           "total_duration_seconds": "number"
-        }
+        },
+        "defaults": {}
       }
     },
     "asset_reconciler": {
@@ -158,10 +200,12 @@
           "scenes",
           "total_duration_seconds"
         ],
+        "optional": [],
         "types": {
           "scenes": "array",
           "total_duration_seconds": "number"
-        }
+        },
+        "defaults": {}
       }
     }
   },
