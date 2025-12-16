@@ -730,20 +730,41 @@ export default function TemplateEditorPage() {
     useEffect(() => {
         if (showSchemaEditor) {
             // Regenerate schema content for the new active service
-            const schema = outputSchemas[activeTab] || { required: [], optional: [], types: {}, defaults: {} }
-            const sampleJson: Record<string, unknown> = {}
-            const allFields = [...(schema.required || []), ...(schema.optional || [])]
-            for (const field of allFields) {
-                const fieldType = schema.types?.[field] || "string"
-                if (fieldType === "array") {
-                    sampleJson[field] = ["...", "..."]
-                } else if (fieldType === "number") {
-                    sampleJson[field] = "..."
-                } else {
-                    sampleJson[field] = "..."
-                }
+            const schema = outputSchemas[activeTab] || {}
+            const schemaAsRecord = schema as Record<string, unknown>
+
+            // Check if this is a JSON Schema (has type, properties, $schema, or items)
+            if (schemaAsRecord.type || schemaAsRecord.properties || schemaAsRecord.$schema || schemaAsRecord.items) {
+                // It's a JSON Schema - display it directly
+                setSchemaEditorContent(JSON.stringify(schema, null, 2))
             }
-            setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
+            // Check for legacy format with fields
+            else if ((schema.required?.length || 0) > 0 || (schema.optional?.length || 0) > 0) {
+                const sampleJson: Record<string, unknown> = {}
+                const allFields = [...(schema.required || []), ...(schema.optional || [])]
+                for (const field of allFields) {
+                    const fieldType = schema.types?.[field] || "string"
+                    if (fieldType === "array") {
+                        sampleJson[field] = ["...", "..."]
+                    } else if (fieldType === "number") {
+                        sampleJson[field] = "..."
+                    } else {
+                        sampleJson[field] = "..."
+                    }
+                }
+                setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
+            }
+            // No schema - show default JSON Schema template
+            else {
+                const jsonSchemaTemplate = {
+                    "type": "object",
+                    "properties": {
+                        "example_field": { "type": "string", "description": "Description of the field" }
+                    },
+                    "required": ["example_field"]
+                }
+                setSchemaEditorContent(JSON.stringify(jsonSchemaTemplate, null, 2))
+            }
             setSchemaError(null)
         }
     }, [activeTab, showSchemaEditor, outputSchemas])
@@ -858,52 +879,93 @@ export default function TemplateEditorPage() {
 
     // Open schema editor with current service's schema
     const openSchemaEditor = () => {
-        // Build a sample JSON from schema for display
-        const sampleJson: Record<string, unknown> = {}
-        const allFields = [...(currentSchema.required || []), ...(currentSchema.optional || [])]
-        for (const field of allFields) {
-            const fieldType = currentSchema.types?.[field] || "string"
-            if (fieldType === "array") {
-                sampleJson[field] = ["...", "..."]
-            } else if (fieldType === "number") {
-                sampleJson[field] = "..."
-            } else {
-                sampleJson[field] = "..."
-            }
+        // Check if we have an existing schema stored as JSON Schema format
+        const existingSchema = currentSchema as Record<string, unknown>
+
+        // If schema has JSON Schema keys (type, properties, $schema), load it directly
+        if (existingSchema.type || existingSchema.properties || existingSchema.$schema) {
+            setSchemaEditorContent(JSON.stringify(existingSchema, null, 2))
         }
-        setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
+        // If schema has legacy keys with content, convert to display
+        else if ((currentSchema.required?.length || 0) > 0 || (currentSchema.optional?.length || 0) > 0) {
+            const sampleJson: Record<string, unknown> = {}
+            const allFields = [...(currentSchema.required || []), ...(currentSchema.optional || [])]
+            for (const field of allFields) {
+                const fieldType = currentSchema.types?.[field] || "string"
+                if (fieldType === "array") {
+                    sampleJson[field] = ["...", "..."]
+                } else if (fieldType === "number") {
+                    sampleJson[field] = "..."
+                } else {
+                    sampleJson[field] = "..."
+                }
+            }
+            setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
+        }
+        // No existing schema - show JSON Schema template
+        else {
+            const jsonSchemaTemplate = {
+                "type": "object",
+                "properties": {
+                    "example_field": { "type": "string", "description": "Description of the field" },
+                    "example_array": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["example_field"]
+            }
+            setSchemaEditorContent(JSON.stringify(jsonSchemaTemplate, null, 2))
+        }
         setSchemaError(null)
         setShowSchemaEditor(true)
     }
 
-    // Save schema from editor
+    // Save schema from editor - supports JSON Schema format
     const saveSchema = () => {
         try {
             const parsed = JSON.parse(schemaEditorContent)
-            // Extract keys from the parsed JSON as schema fields
-            const fields = Object.keys(parsed)
-            const types: Record<string, string> = {}
-            for (const key of fields) {
-                const val = parsed[key]
-                if (Array.isArray(val)) {
-                    types[key] = "array"
-                } else if (typeof val === "number") {
-                    types[key] = "number"
-                } else {
-                    types[key] = "string"
+
+            // Check if this is a JSON Schema (has type, properties, $schema, or items)
+            const isJsonSchema = (
+                parsed.type === "object" ||
+                parsed.type === "array" ||
+                parsed.properties ||
+                parsed.$schema ||
+                parsed.items
+            )
+
+            if (isJsonSchema) {
+                // Store JSON Schema directly - backend will use it as-is
+                console.log("💾 Saving JSON Schema for", activeTab)
+                setOutputSchemas(prev => ({
+                    ...prev,
+                    [activeTab]: parsed
+                }))
+            } else {
+                // Legacy format: extract field names from simple JSON object
+                const fields = Object.keys(parsed)
+                const types: Record<string, string> = {}
+                for (const key of fields) {
+                    const val = parsed[key]
+                    if (Array.isArray(val)) {
+                        types[key] = "array"
+                    } else if (typeof val === "number") {
+                        types[key] = "number"
+                    } else {
+                        types[key] = "string"
+                    }
                 }
+                const newSchema: OutputSchema = {
+                    required: fields,
+                    optional: [],
+                    types,
+                    defaults: {}
+                }
+                console.log("💾 Saving legacy schema for", activeTab, ":", newSchema)
+                setOutputSchemas(prev => ({
+                    ...prev,
+                    [activeTab]: newSchema
+                }))
             }
-            const newSchema: OutputSchema = {
-                required: fields,
-                optional: [],
-                types,
-                defaults: {}
-            }
-            console.log("💾 Saving schema for", activeTab, ":", newSchema)
-            setOutputSchemas(prev => ({
-                ...prev,
-                [activeTab]: newSchema
-            }))
+
             setSchemaError(null)
             setShowSchemaEditor(false)
             setHasChanges(true)

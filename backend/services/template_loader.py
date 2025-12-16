@@ -126,24 +126,69 @@ def get_pipeline_order(template: dict) -> list[str]:
     ])
 
 
+def is_json_schema(schema: dict) -> bool:
+    """
+    Check if the schema is in JSON Schema format.
+    JSON Schema typically has 'type', 'properties', or '$schema' keys.
+    """
+    return (
+        schema.get("type") in ["object", "array", "string", "number", "boolean", "integer"] or
+        "properties" in schema or
+        "$schema" in schema or
+        "items" in schema
+    )
+
+
 def schema_to_prompt_suffix(output_schema: dict, variables: dict = None) -> str:
     """
     Convert an output_schema into a prompt suffix that instructs the AI to return JSON.
     
-    The schema is converted to a JSON example with placeholder values.
-    Variables like {{duration}} in the schema are interpolated if provided.
+    Supports two formats:
+    1. JSON Schema (standard): Has 'type', 'properties', '$schema' keys
+       -> Injects as-is with strict instructions
+    2. Legacy format: Has 'required', 'optional', 'types' keys
+       -> Builds sample JSON from field definitions
     
     Args:
         output_schema: The output_schema dict from the template
         variables: Optional dict of variables to interpolate in the schema
         
     Returns:
-        A string like "\n\nRETOURNE CE JSON:\n{...}" to append to the prompt
+        A prompt suffix with output instructions
     """
     if not output_schema:
         return ""
     
-    # Build a sample JSON from the schema
+    # ═══════════════════════════════════════════════════
+    # JSON SCHEMA FORMAT (new standard)
+    # ═══════════════════════════════════════════════════
+    if is_json_schema(output_schema):
+        schema_str = json.dumps(output_schema, ensure_ascii=False, indent=2)
+        
+        # Interpolate variables if provided (e.g., {{duration}} -> 60)
+        if variables:
+            pattern = r'\{\{(\w+)\}\}'
+            def replace_var(match):
+                var_name = match.group(1)
+                if var_name in variables:
+                    value = variables[var_name]
+                    if isinstance(value, (list, dict)):
+                        return json.dumps(value, ensure_ascii=False)
+                    return str(value)
+                return match.group(0)
+            schema_str = re.sub(pattern, replace_var, schema_str)
+        
+        return f"""
+
+---
+OUTPUT INSTRUCTIONS:
+You must respond strictly with a valid JSON object.
+Adhere strictly to the following JSON Schema:
+{schema_str}"""
+    
+    # ═══════════════════════════════════════════════════
+    # LEGACY FORMAT (backward compatibility)
+    # ═══════════════════════════════════════════════════
     sample_json = {}
     
     # Get required and optional fields
@@ -153,6 +198,9 @@ def schema_to_prompt_suffix(output_schema: dict, variables: dict = None) -> str:
     defaults = output_schema.get("defaults", {})
     
     all_fields = list(set(required + optional))
+    
+    if not all_fields:
+        return ""
     
     for field in all_fields:
         field_type = types.get(field, "string")
