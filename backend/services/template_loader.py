@@ -130,8 +130,8 @@ def schema_to_prompt_suffix(output_schema: dict, variables: dict = None) -> str:
     """
     Convert an output_schema into a prompt suffix that instructs the AI to return JSON.
     
-    If raw_template is provided, use it directly (with variable interpolation).
-    Otherwise, build JSON from required/optional/types/defaults fields.
+    The schema is converted to a JSON example with placeholder values.
+    Variables like {{duration}} in the schema are interpolated if provided.
     
     Args:
         output_schema: The output_schema dict from the template
@@ -143,27 +143,7 @@ def schema_to_prompt_suffix(output_schema: dict, variables: dict = None) -> str:
     if not output_schema:
         return ""
     
-    # Check if raw_template is available (new format with {{variables}} support)
-    raw_template = output_schema.get("raw_template")
-    
-    if raw_template:
-        # Use raw_template directly - interpolate {{variables}} if provided
-        json_str = raw_template
-        if variables:
-            pattern = r'\{\{(\w+)\}\}'
-            def replace_var(match):
-                var_name = match.group(1)
-                if var_name in variables:
-                    value = variables[var_name]
-                    if isinstance(value, (list, dict)):
-                        return json.dumps(value, ensure_ascii=False)
-                    return str(value)
-                return match.group(0)
-            json_str = re.sub(pattern, replace_var, json_str)
-        
-        return f"\n\nRETOURNE CE JSON (remplace les '...' par des vraies valeurs):\n{json_str}"
-    
-    # Legacy format: Build a sample JSON from the schema fields
+    # Build a sample JSON from the schema
     sample_json = {}
     
     # Get required and optional fields
@@ -173,9 +153,6 @@ def schema_to_prompt_suffix(output_schema: dict, variables: dict = None) -> str:
     defaults = output_schema.get("defaults", {})
     
     all_fields = list(set(required + optional))
-    
-    if not all_fields:
-        return ""
     
     for field in all_fields:
         field_type = types.get(field, "string")
