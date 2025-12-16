@@ -247,6 +247,54 @@ function DroppableEditor({
     // In preview mode, replace {{variable}} with example values
     const displayContent = isPreview ? interpolateVariables(content, variables) : content
 
+    // Define themes BEFORE editor mounts to prevent blue flash
+    const handleEditorBeforeMount = (monaco: Monaco) => {
+        // Register language if not already registered
+        if (!monaco.languages.getLanguages().some((lang: { id: string }) => lang.id === 'promptlang')) {
+            monaco.languages.register({ id: 'promptlang' })
+
+            // Tokenizer: {{variable}} orange, [[interpolated]] green
+            monaco.languages.setMonarchTokensProvider('promptlang', {
+                tokenizer: {
+                    root: [
+                        [/\{\{[^}]+\}\}/, 'variable'],      // {{anything}} -> orange
+                        [/\[\[[^\]]+\]\]/, 'interpolated'], // [[anything]] -> green (preview)
+                    ]
+                }
+            })
+        }
+
+        // Edit mode: white text, orange variables
+        monaco.editor.defineTheme('prompt-theme', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [
+                { token: 'variable', foreground: 'f97316', fontStyle: 'bold' },
+                { token: 'interpolated', foreground: '22c55e', fontStyle: 'bold' },
+            ],
+            colors: {
+                'editor.background': '#0c0a1d',
+                'editor.foreground': '#e2e8f0',
+                'editor.lineHighlightBackground': '#1e1b4b30',
+            }
+        })
+
+        // Preview mode: same theme
+        monaco.editor.defineTheme('prompt-theme-preview', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [
+                { token: 'variable', foreground: 'f97316', fontStyle: 'bold' },
+                { token: 'interpolated', foreground: '22c55e', fontStyle: 'bold' },
+            ],
+            colors: {
+                'editor.background': '#0c0a1d',
+                'editor.foreground': '#e2e8f0',
+                'editor.lineHighlightBackground': '#1e1b4b30',
+            }
+        })
+    }
+
     const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
         editorRef.current = editor
 
@@ -295,6 +343,15 @@ function DroppableEditor({
         monaco.editor.setTheme(isPreview ? 'prompt-theme-preview' : 'prompt-theme')
     }
 
+    // Ensure theme is always applied when isPreview changes
+    useEffect(() => {
+        // Force theme refresh when component updates
+        const monaco = (window as unknown as { monaco?: Monaco }).monaco
+        if (monaco?.editor) {
+            monaco.editor.setTheme(isPreview ? 'prompt-theme-preview' : 'prompt-theme')
+        }
+    }, [isPreview, halfHeight])
+
     return (
         <div
             ref={setNodeRef}
@@ -314,12 +371,13 @@ function DroppableEditor({
                 </div>
             )}
             <Editor
-                key={isPreview ? 'preview' : 'edit'}
+                key="prompt-editor"
                 height="100%"
                 defaultLanguage="promptlang"
                 theme={isPreview ? "prompt-theme-preview" : "prompt-theme"}
                 value={displayContent}
                 onChange={(value) => !isPreview && onChange(value || "")}
+                beforeMount={handleEditorBeforeMount}
                 onMount={handleEditorMount}
                 options={{
                     minimap: { enabled: false },
@@ -877,15 +935,15 @@ export default function TemplateEditorPage() {
     const getAllVariablesByCategory = () => {
         const serviceOrder = Object.keys(prompts)
         const currentIndex = serviceOrder.indexOf(activeTab)
-        
+
         type VariableCategory = {
             name: string
             displayName: string
             variables: { name: string; available: boolean }[]
         }
-        
+
         const categories: VariableCategory[] = []
-        
+
         // 1. User inputs (always available)
         const userInputVars = ['title', 'pitch', 'visual_style', 'duration', 'tags_str', 'answers_str', 'language', 'video_type']
         categories.push({
@@ -893,12 +951,12 @@ export default function TemplateEditorPage() {
             displayName: 'Inputs utilisateur',
             variables: userInputVars.map(v => ({ name: v, available: true }))
         })
-        
+
         // 2. Variables from each service's output_schema
         for (let i = 0; i < serviceOrder.length; i++) {
             const serviceName = serviceOrder[i]
             const schema = outputSchemas[serviceName]
-            
+
             if (schema) {
                 const schemaVars = [...(schema.required || []), ...(schema.optional || [])]
                 if (schemaVars.length > 0) {
@@ -914,7 +972,7 @@ export default function TemplateEditorPage() {
                 }
             }
         }
-        
+
         return categories
     }
 
@@ -1084,7 +1142,7 @@ export default function TemplateEditorPage() {
                                             <p className="text-[10px] text-white/40 mb-3">
                                                 {showPreview ? 'Sortir du preview pour éditer' : 'Cliquez pour insérer'}
                                             </p>
-                                            
+
                                             {getAllVariablesByCategory().map(category => (
                                                 <div key={category.name} className="mb-3">
                                                     <h4 className="text-[10px] font-medium text-white/50 uppercase tracking-wider mb-1.5">
@@ -1096,11 +1154,10 @@ export default function TemplateEditorPage() {
                                                                 key={v.name}
                                                                 onClick={() => v.available && insertVariable(v.name)}
                                                                 disabled={!v.available || showPreview}
-                                                                className={`text-[10px] px-1.5 py-0.5 rounded border transition-all ${
-                                                                    v.available
-                                                                        ? 'bg-orange-500/10 border-orange-500/40 text-orange-400 hover:bg-orange-500/20 hover:border-orange-500/60 cursor-pointer'
-                                                                        : 'bg-gray-500/10 border-gray-500/30 text-gray-500 cursor-not-allowed opacity-50'
-                                                                }`}
+                                                                className={`text-[10px] px-1.5 py-0.5 rounded border transition-all ${v.available
+                                                                    ? 'bg-orange-500/10 border-orange-500/40 text-orange-400 hover:bg-orange-500/20 hover:border-orange-500/60 cursor-pointer'
+                                                                    : 'bg-gray-500/10 border-gray-500/30 text-gray-500 cursor-not-allowed opacity-50'
+                                                                    }`}
                                                                 title={v.available ? `Insérer {{${v.name}}}` : `Disponible après ${category.displayName}`}
                                                             >
                                                                 {v.name}
