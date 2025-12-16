@@ -268,13 +268,14 @@ def _create_database_entities(project_id: int, context: PipelineContext, db) -> 
         location_name = scene_data.get("location_name", "")
         scene_location = location_map.get(location_name.lower()) if location_name else None
         
-        # Parse duration
-        estimated_duration = scene_data.get("duration_seconds", 15)
-        if isinstance(estimated_duration, str):
+        # Parse duration and convert to string format for DB
+        duration_seconds = scene_data.get("duration_seconds", 15)
+        if isinstance(duration_seconds, str):
             try:
-                estimated_duration = int(estimated_duration)
+                duration_seconds = int(duration_seconds)
             except ValueError:
-                estimated_duration = 15
+                duration_seconds = 15
+        estimated_duration_str = f"~{duration_seconds}s"
         
         # Create scene
         new_scene = SceneDB(
@@ -282,7 +283,7 @@ def _create_database_entities(project_id: int, context: PipelineContext, db) -> 
             sequence_order=i + 1,
             title=scene_data.get("title", scene_data.get("title_suggestion", f"Scene {i+1}")),
             summary=scene_data.get("summary", scene_data.get("purpose", "")),
-            estimated_duration=estimated_duration,
+            estimated_duration=estimated_duration_str,
             status="pending",
             location_id=scene_location.id if scene_location else None
         )
