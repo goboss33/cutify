@@ -873,6 +873,51 @@ export default function TemplateEditorPage() {
         return [...new Set(availableVars)]
     }
 
+    // Get ALL variables organized by category, with availability status
+    const getAllVariablesByCategory = () => {
+        const serviceOrder = Object.keys(prompts)
+        const currentIndex = serviceOrder.indexOf(activeTab)
+        
+        type VariableCategory = {
+            name: string
+            displayName: string
+            variables: { name: string; available: boolean }[]
+        }
+        
+        const categories: VariableCategory[] = []
+        
+        // 1. User inputs (always available)
+        const userInputVars = ['title', 'pitch', 'visual_style', 'duration', 'tags_str', 'answers_str', 'language', 'video_type']
+        categories.push({
+            name: 'user_inputs',
+            displayName: 'Inputs utilisateur',
+            variables: userInputVars.map(v => ({ name: v, available: true }))
+        })
+        
+        // 2. Variables from each service's output_schema
+        for (let i = 0; i < serviceOrder.length; i++) {
+            const serviceName = serviceOrder[i]
+            const schema = outputSchemas[serviceName]
+            
+            if (schema) {
+                const schemaVars = [...(schema.required || []), ...(schema.optional || [])]
+                if (schemaVars.length > 0) {
+                    categories.push({
+                        name: serviceName,
+                        displayName: serviceName.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+                        variables: schemaVars.map(v => ({
+                            name: v,
+                            // Available only if this service comes BEFORE the current one in the pipeline
+                            available: i < currentIndex
+                        }))
+                    })
+                }
+            }
+        }
+        
+        return categories
+    }
+
     return (
         <DndContext onDragEnd={handleDragEnd}>
             <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-purple-950">
@@ -1030,25 +1075,40 @@ export default function TemplateEditorPage() {
                                     </div>
 
                                     <div className="flex-1 flex overflow-hidden">
-                                        {/* Variable Palette - Grayed out in preview mode */}
-                                        <div className={`w-72 border-r border-white/10 bg-black/10 p-4 overflow-y-auto transition-opacity ${showPreview ? 'opacity-40 pointer-events-none' : ''}`}>
-                                            <h3 className="text-sm font-semibold text-white/80 mb-3 flex items-center gap-2">
+                                        {/* Variable Palette - Organized by category */}
+                                        <div className={`w-64 border-r border-white/10 bg-black/10 p-3 overflow-y-auto transition-opacity ${showPreview ? 'opacity-40 pointer-events-none' : ''}`}>
+                                            <h3 className="text-sm font-semibold text-white/80 mb-2 flex items-center gap-2">
                                                 <span className={`w-2 h-2 rounded-full ${showPreview ? 'bg-gray-500' : 'bg-orange-500'}`} />
                                                 Variables
-                                                {showPreview && <span className="text-xs text-white/40 ml-auto">(disabled)</span>}
                                             </h3>
-                                            <p className="text-xs text-white/40 mb-4">
-                                                {showPreview ? 'Exit preview to edit' : 'Drag onto editor or click to insert'}
+                                            <p className="text-[10px] text-white/40 mb-3">
+                                                {showPreview ? 'Sortir du preview pour éditer' : 'Cliquez pour insérer'}
                                             </p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {currentVariables.map(v => (
-                                                    <DraggableVariable
-                                                        key={v.name}
-                                                        variable={v}
-                                                        onClick={() => insertVariable(v.name)}
-                                                    />
-                                                ))}
-                                            </div>
+                                            
+                                            {getAllVariablesByCategory().map(category => (
+                                                <div key={category.name} className="mb-3">
+                                                    <h4 className="text-[10px] font-medium text-white/50 uppercase tracking-wider mb-1.5">
+                                                        {category.displayName}
+                                                    </h4>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {category.variables.map(v => (
+                                                            <button
+                                                                key={v.name}
+                                                                onClick={() => v.available && insertVariable(v.name)}
+                                                                disabled={!v.available || showPreview}
+                                                                className={`text-[10px] px-1.5 py-0.5 rounded border transition-all ${
+                                                                    v.available
+                                                                        ? 'bg-orange-500/10 border-orange-500/40 text-orange-400 hover:bg-orange-500/20 hover:border-orange-500/60 cursor-pointer'
+                                                                        : 'bg-gray-500/10 border-gray-500/30 text-gray-500 cursor-not-allowed opacity-50'
+                                                                }`}
+                                                                title={v.available ? `Insérer {{${v.name}}}` : `Disponible après ${category.displayName}`}
+                                                            >
+                                                                {v.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
 
                                         {/* Editor Container with Schema Overlay */}
