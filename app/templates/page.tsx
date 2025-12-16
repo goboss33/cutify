@@ -71,6 +71,7 @@ type OutputSchema = {
     optional: string[]
     types: Record<string, string>
     defaults: Record<string, unknown>
+    raw_template?: string  // Raw text template with {{variables}} - backend will interpolate
 }
 type StoredSchemas = Record<string, OutputSchema>
 
@@ -731,19 +732,26 @@ export default function TemplateEditorPage() {
         if (showSchemaEditor) {
             // Regenerate schema content for the new active service
             const schema = outputSchemas[activeTab] || { required: [], optional: [], types: {}, defaults: {} }
-            const sampleJson: Record<string, unknown> = {}
-            const allFields = [...(schema.required || []), ...(schema.optional || [])]
-            for (const field of allFields) {
-                const fieldType = schema.types?.[field] || "string"
-                if (fieldType === "array") {
-                    sampleJson[field] = ["...", "..."]
-                } else if (fieldType === "number") {
-                    sampleJson[field] = "..."
-                } else {
-                    sampleJson[field] = "..."
+
+            // Use raw_template if available (new format with {{variables}})
+            if (schema.raw_template) {
+                setSchemaEditorContent(schema.raw_template)
+            } else {
+                // Legacy: build from required/optional fields
+                const sampleJson: Record<string, unknown> = {}
+                const allFields = [...(schema.required || []), ...(schema.optional || [])]
+                for (const field of allFields) {
+                    const fieldType = schema.types?.[field] || "string"
+                    if (fieldType === "array") {
+                        sampleJson[field] = ["...", "..."]
+                    } else if (fieldType === "number") {
+                        sampleJson[field] = "..."
+                    } else {
+                        sampleJson[field] = "..."
+                    }
                 }
+                setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
             }
-            setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
             setSchemaError(null)
         }
     }, [activeTab, showSchemaEditor, outputSchemas])
@@ -858,58 +866,70 @@ export default function TemplateEditorPage() {
 
     // Open schema editor with current service's schema
     const openSchemaEditor = () => {
-        // Build a sample JSON from schema for display
-        const sampleJson: Record<string, unknown> = {}
-        const allFields = [...(currentSchema.required || []), ...(currentSchema.optional || [])]
-        for (const field of allFields) {
-            const fieldType = currentSchema.types?.[field] || "string"
-            if (fieldType === "array") {
-                sampleJson[field] = ["...", "..."]
-            } else if (fieldType === "number") {
-                sampleJson[field] = "..."
-            } else {
-                sampleJson[field] = "..."
+        // If we have a raw_template (with {{variables}}), use it directly
+        if (currentSchema.raw_template) {
+            setSchemaEditorContent(currentSchema.raw_template)
+        } else {
+            // Build a sample JSON from schema for display
+            const sampleJson: Record<string, unknown> = {}
+            const allFields = [...(currentSchema.required || []), ...(currentSchema.optional || [])]
+            for (const field of allFields) {
+                const fieldType = currentSchema.types?.[field] || "string"
+                if (fieldType === "array") {
+                    sampleJson[field] = ["...", "..."]
+                } else if (fieldType === "number") {
+                    sampleJson[field] = "..."
+                } else {
+                    sampleJson[field] = "..."
+                }
             }
+            setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
         }
-        setSchemaEditorContent(JSON.stringify(sampleJson, null, 2))
         setSchemaError(null)
         setShowSchemaEditor(true)
     }
 
-    // Save schema from editor
+    // Save schema from editor - accepts raw text with {{variables}}
     const saveSchema = () => {
+        // Store the raw template (may contain {{variables}})
+        // Backend will interpolate variables before parsing as JSON
+        const newSchema: OutputSchema = {
+            required: [],
+            optional: [],
+            types: {},
+            defaults: {},
+            raw_template: schemaEditorContent
+        }
+
+        // Try to extract field names for display purposes (optional)
+        // Replace {{var}} with placeholder values to make it parseable
+        const sanitized = schemaEditorContent.replace(/\{\{[^}]+\}\}/g, '"__var__"')
         try {
-            const parsed = JSON.parse(schemaEditorContent)
-            // Extract keys from the parsed JSON as schema fields
-            const fields = Object.keys(parsed)
-            const types: Record<string, string> = {}
-            for (const key of fields) {
+            const parsed = JSON.parse(sanitized)
+            newSchema.required = Object.keys(parsed)
+            for (const key of newSchema.required) {
                 const val = parsed[key]
                 if (Array.isArray(val)) {
-                    types[key] = "array"
-                } else if (typeof val === "number") {
-                    types[key] = "number"
+                    newSchema.types[key] = "array"
+                } else if (typeof val === "number" || val === '__var__') {
+                    newSchema.types[key] = "string"
                 } else {
-                    types[key] = "string"
+                    newSchema.types[key] = "string"
                 }
             }
-            const newSchema: OutputSchema = {
-                required: fields,
-                optional: [],
-                types,
-                defaults: {}
-            }
-            console.log("💾 Saving schema for", activeTab, ":", newSchema)
-            setOutputSchemas(prev => ({
-                ...prev,
-                [activeTab]: newSchema
-            }))
-            setSchemaError(null)
-            setShowSchemaEditor(false)
-            setHasChanges(true)
-        } catch (e) {
-            setSchemaError("JSON invalide: " + (e as Error).message)
+        } catch {
+            // Parsing failed - that's OK, we still save the raw_template
+            console.log("📝 Schema contains complex {{variables}}, storing as raw template")
         }
+
+        console.log("💾 Saving schema for", activeTab)
+        setOutputSchemas(prev => ({
+            ...prev,
+            [activeTab]: newSchema
+        }))
+        setSchemaError(null)
+        setShowSchemaEditor(false)
+        setHasChanges(true)
     }
 
     // Get available variables from previous services
