@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  cutify-app:
+    container_name: cutify-app
+    build: .
+    restart: always
+    ports:
+      - "3005:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - public_web
+
+networks:
+  public_web:
+    external: true
